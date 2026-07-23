@@ -18,10 +18,13 @@ export function ControlCard({ s, d, a }: { s: ReaderState; d: Derived; a: Reader
   }
   return (
     <div
+      aria-hidden={d.chromeHidden}
       style={{
         flex: 'none',
-        padding: '6px 20px 8px',
-        transition: 'opacity .3s ease',
+        overflow: 'hidden',
+        maxHeight: d.chromeHidden ? 0 : 260,
+        padding: d.chromeHidden ? '0 20px' : '6px 20px 8px',
+        transition: 'max-height .3s ease, padding .3s ease, opacity .3s ease',
         opacity: d.chromeOp,
         pointerEvents: d.chromePe,
       }}

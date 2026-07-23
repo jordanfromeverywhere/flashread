@@ -14,7 +14,7 @@ import { THEME_ORDER } from './lib/theme'
 import { deriveTitle, fetchArticle } from './lib/intake'
 import { CAL_PASSAGE, SAMPLE, STARTERS } from './lib/content'
 
-export type PanelKey = 'intake' | 'library' | 'settings' | 'stats' | 'calibrate' | null
+export type PanelKey = 'intake' | 'library' | 'settings' | 'stats' | 'calibrate' | 'more' | null
 export type IntakeTab = 'paste' | 'pdf' | 'url'
 export type CalState = 'idle' | 'running' | 'done'
 
@@ -848,6 +848,7 @@ export function useSpeedReader() {
     [setState],
   )
   const openReadTab = useCallback(() => setState({ panel: null }), [setState])
+  const openMore = useCallback(() => setState({ panel: 'more' }), [setState])
   const closePanel = useCallback(() => {
     if (stateRef.current.cal === 'running') clearTimeout(r.calTimer)
     setState({ panel: null, cal: 'idle' })
@@ -1037,6 +1038,7 @@ export function useSpeedReader() {
       openStats,
       openCalibrate,
       openReadTab,
+      openMore,
       closePanel,
       quickTheme,
       toggleFocus,

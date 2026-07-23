@@ -38,6 +38,7 @@ export interface Derived {
   // chrome
   chromeOp: string
   chromePe: 'none' | 'auto'
+  chromeHidden: boolean
   showHoldHint: boolean
   flashMode: boolean
   flowMode: boolean
@@ -111,6 +112,7 @@ export function derive(s: ReaderState): Derived {
     pctW: pct + '%',
     chromeOp: s.chromeHidden ? '0' : '1',
     chromePe: s.chromeHidden ? 'none' : 'auto',
+    chromeHidden: s.chromeHidden,
     showHoldHint: has && !s.playing && !s.panel && !s.chromeHidden,
     flashMode: s.readMode !== 'flow',
     flowMode: s.readMode === 'flow',

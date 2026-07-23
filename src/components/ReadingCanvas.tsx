@@ -346,19 +346,29 @@ function EmptyState({ d, a }: { d: Derived; a: ReaderActions }) {
         <button onClick={a.loadSample} style={outlineBtn}>
           Try a sample
         </button>
-        <button
-          onClick={a.openCalibrate}
-          style={{
-            font: '600 13px/1 sans-serif',
-            color: t.sub,
-            background: 'transparent',
-            border: 'none',
-            padding: 8,
-            cursor: 'pointer',
-          }}
-        >
-          Calibrate my speed →
-        </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 2 }}>
+          {[
+            { label: 'Stats', onClick: a.openStats },
+            { label: 'Calibrate speed', onClick: a.openCalibrate },
+          ].map((lnk, i) => (
+            <span key={lnk.label} style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+              {i > 0 && <span style={{ color: t.sub, opacity: 0.5 }}>·</span>}
+              <button
+                onClick={lnk.onClick}
+                style={{
+                  font: '600 13px/1 sans-serif',
+                  color: t.sub,
+                  background: 'transparent',
+                  border: 'none',
+                  padding: 8,
+                  cursor: 'pointer',
+                }}
+              >
+                {lnk.label}
+              </button>
+            </span>
+          ))}
+        </div>
       </div>
     </div>
   )

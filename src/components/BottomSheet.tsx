@@ -5,6 +5,7 @@ import { LibraryPanel } from './panels/LibraryPanel'
 import { SettingsPanel } from './panels/SettingsPanel'
 import { CalibratePanel } from './panels/CalibratePanel'
 import { StatsPanel } from './panels/StatsPanel'
+import { MorePanel } from './panels/MorePanel'
 
 const TITLES: Record<Exclude<PanelKey, null>, string> = {
   intake: 'Add to read',
@@ -12,6 +13,7 @@ const TITLES: Record<Exclude<PanelKey, null>, string> = {
   settings: 'Settings',
   stats: 'Your reading',
   calibrate: 'Calibrate speed',
+  more: 'More',
 }
 
 export function BottomSheet({ s, d, a }: { s: ReaderState; d: Derived; a: ReaderActions }) {
@@ -88,6 +90,7 @@ export function BottomSheet({ s, d, a }: { s: ReaderState; d: Derived; a: Reader
           {s.panel === 'settings' && <SettingsPanel s={s} d={d} a={a} />}
           {s.panel === 'calibrate' && <CalibratePanel s={s} d={d} a={a} />}
           {s.panel === 'stats' && <StatsPanel s={s} d={d} />}
+          {s.panel === 'more' && <MorePanel d={d} a={a} />}
         </div>
       </div>
     </>
