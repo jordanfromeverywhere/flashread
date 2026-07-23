@@ -1,4 +1,5 @@
 import type { CSSProperties } from 'react'
+import { useLayoutEffect, useRef, useState } from 'react'
 import type { Derived } from '../derive'
 import type { ReaderActions, ReaderState } from '../useSpeedReader'
 
@@ -40,6 +41,70 @@ export function ReadingCanvas({
   a: ReaderActions
 }) {
   const { t } = d
+  const flashWrapRef = useRef<HTMLDivElement>(null)
+  const [flying, setFlying] = useState(false)
+
+  // On play (Flash mode), fly a full-size clone of the pivoted word from the
+  // resting word's spot up to the centered big-word slot — the word travels
+  // into place instead of jump-cutting. useLayoutEffect measures before paint.
+  useLayoutEffect(() => {
+    if (!s.playing || !d.flashMode) return
+    if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return
+    const wrap = flashWrapRef.current
+    if (!wrap) return
+    const small = wrap.querySelector('[data-cur="1"]') as HTMLElement | null
+    const big = wrap.querySelector('[data-bigword]') as HTMLElement | null
+    if (!small || !big) return
+    const r0 = small.getBoundingClientRect()
+    const r1 = big.getBoundingClientRect()
+    if (!r0.width || !r0.height || !r1.width || !r1.height) return
+
+    const clone = big.cloneNode(true) as HTMLElement
+    clone.removeAttribute('data-bigword')
+    clone.style.width = `${r1.width}px`
+    const fly = document.createElement('div')
+    Object.assign(fly.style, {
+      position: 'fixed',
+      left: `${r1.left + r1.width / 2}px`,
+      top: `${r1.top + r1.height / 2}px`,
+      width: `${r1.width}px`,
+      transformOrigin: '50% 50%',
+      pointerEvents: 'none',
+      zIndex: '40',
+    })
+    fly.appendChild(clone)
+    document.body.appendChild(fly)
+
+    const dx = r0.left + r0.width / 2 - (r1.left + r1.width / 2)
+    const dy = r0.top + r0.height / 2 - (r1.top + r1.height / 2)
+    const s0 = r0.height / r1.height
+
+    setFlying(true)
+    const anim = fly.animate(
+      [
+        { transform: `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px)) scale(${s0})` },
+        { transform: 'translate(-50%, -50%) scale(1)' },
+      ],
+      { duration: 340, easing: 'cubic-bezier(.32,.72,0,1)', fill: 'both' },
+    )
+    let settled = false
+    const settle = () => {
+      if (settled) return
+      settled = true
+      fly.remove()
+      setFlying(false)
+    }
+    anim.onfinish = settle
+    return () => {
+      try {
+        anim.cancel()
+      } catch {
+        /* no-op */
+      }
+      settle()
+    }
+  }, [s.playing, d.flashMode])
+
   return (
     <div
       onPointerDown={a.holdStart}
@@ -92,6 +157,7 @@ export function ReadingCanvas({
 
           {d.flashMode && (
             <div
+              ref={flashWrapRef}
               style={{
                 position: 'relative',
                 flex: 1,
@@ -126,7 +192,7 @@ export function ReadingCanvas({
                   justifyContent: 'center',
                   background: t.bg,
                   transition: 'opacity .16s ease',
-                  opacity: d.wordOverlayOpacity,
+                  opacity: flying ? 0 : d.wordOverlayOpacity,
                   pointerEvents: 'none',
                 }}
               >
@@ -198,6 +264,7 @@ function SingleWord({ s, d }: { s: ReaderState; d: Derived }) {
       <div style={{ ...rule, top: 16 }} />
       <div style={{ ...rule, bottom: 16 }} />
       <div
+        data-bigword
         style={{
           display: 'grid',
           gridTemplateColumns: '1fr auto 1fr',

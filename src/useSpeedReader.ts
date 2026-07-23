@@ -945,6 +945,14 @@ export function useSpeedReader() {
       }
     }
 
+    // Ask the browser not to evict our library/progress under storage pressure
+    // (helps installed PWAs, notably on iOS, keep saved texts across launches).
+    try {
+      navigator.storage?.persist?.()
+    } catch {
+      /* not supported — non-fatal */
+    }
+
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker
         .register(`${import.meta.env.BASE_URL}sw.js`)
