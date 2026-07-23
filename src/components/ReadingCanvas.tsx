@@ -231,7 +231,7 @@ export function ReadingCanvas({
                 animation: 'srfade .4s ease',
               }}
             >
-              <span style={{ width: 9, height: 9, borderRadius: '50%', background: t.accent }} />
+              <span style={{ width: 9, height: 9, borderRadius: '50%', background: t.focus }} />
               Press &amp; hold to read · or hold Space
             </div>
           )}
@@ -245,7 +245,7 @@ export function ReadingCanvas({
 
 function SingleWord({ s, d }: { s: ReaderState; d: Derived }) {
   const { t } = d
-  const line: CSSProperties = { position: 'absolute', left: '50%', transform: 'translateX(-50%)', width: 2, height: 16, background: t.accent, opacity: 0.8 }
+  const line: CSSProperties = { position: 'absolute', left: '50%', transform: 'translateX(-50%)', width: 2, height: 16, background: t.focus, opacity: 0.8 }
   const rule: CSSProperties = { position: 'absolute', left: 0, right: 0, height: 1, background: t.border, opacity: 0.5 }
   return (
     <div
@@ -278,7 +278,7 @@ function SingleWord({ s, d }: { s: ReaderState; d: Derived }) {
         }}
       >
         <span style={{ textAlign: 'right', whiteSpace: 'pre' }}>{d.pre}</span>
-        <span style={{ color: t.accent }}>{d.pivotCh}</span>
+        <span style={{ color: t.focus }}>{d.pivotCh}</span>
         <span style={{ textAlign: 'left', whiteSpace: 'pre' }}>{d.post}</span>
       </div>
     </div>
@@ -300,7 +300,7 @@ function EmptyState({ d, a }: { d: Derived; a: ReaderActions }) {
   return (
     <div style={{ textAlign: 'center', animation: 'srrise .4s ease' }}>
       <div style={{ font: '400 33px/1.15 Georgia,serif', letterSpacing: '-.02em', marginBottom: 12 }}>
-        Read at the <span style={{ color: t.accent }}>speed</span> of thought.
+        Read at the <span style={{ color: t.focus }}>speed</span> of thought.
       </div>
       <p style={{ font: '400 14px/1.6 sans-serif', color: t.sub, margin: '0 auto 24px', maxWidth: 280 }}>
         One word at a time, pinned to the spot your eye already looks. Load something and press play.

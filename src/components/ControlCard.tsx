@@ -138,7 +138,7 @@ export function ControlCard({ s, d, a }: { s: ReaderState; d: Derived; a: Reader
             cursor: 'pointer',
             border: `1px solid ${s.audioOn ? t.accent : t.border}`,
             background: s.audioOn ? t.accent : 'transparent',
-            color: s.audioOn ? '#fff' : t.sub,
+            color: s.audioOn ? t.bg : t.sub,
             whiteSpace: 'nowrap',
             flex: 'none',
           }}

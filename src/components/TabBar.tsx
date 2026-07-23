@@ -9,11 +9,14 @@ export function TabBar({ s, d, a }: { s: ReaderState; d: Derived; a: ReaderActio
     display: 'flex',
     flexDirection: 'column',
     alignItems: 'center',
+    justifyContent: 'center',
     gap: 3,
     background: 'none',
     border: 'none',
     cursor: 'pointer',
-    padding: '2px 6px',
+    padding: '6px 10px',
+    minWidth: 52,
+    minHeight: 44,
   } as const
 
   return (

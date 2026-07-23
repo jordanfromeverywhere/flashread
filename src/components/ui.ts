@@ -9,7 +9,7 @@ export function pillStyle(t: Theme, on: boolean): CSSProperties {
     borderRadius: 9,
     cursor: 'pointer',
     border: `1px solid ${on ? t.accent : t.border}`,
-    color: on ? '#fff' : t.text,
+    color: on ? t.bg : t.text,
     background: on ? t.accent : 'transparent',
   }
 }
@@ -21,7 +21,7 @@ export function tabStyle(t: Theme, on: boolean): CSSProperties {
     borderRadius: 9,
     cursor: 'pointer',
     border: `1px solid ${on ? t.accent : t.border}`,
-    color: on ? '#fff' : t.text,
+    color: on ? t.bg : t.text,
     background: on ? t.accent : 'transparent',
   }
 }
@@ -33,7 +33,7 @@ export function fontPillStyle(t: Theme, family: string, on: boolean): CSSPropert
     borderRadius: 9,
     cursor: 'pointer',
     border: `1px solid ${on ? t.accent : t.border}`,
-    color: on ? '#fff' : t.text,
+    color: on ? t.bg : t.text,
     background: on ? t.accent : 'transparent',
   }
 }

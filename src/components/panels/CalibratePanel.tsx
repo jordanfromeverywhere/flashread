@@ -66,7 +66,7 @@ export function CalibratePanel({ s, d, a }: { s: ReaderState; d: Derived; a: Rea
             }}
           >
             <span style={{ textAlign: 'right', whiteSpace: 'pre' }}>{s.calPre}</span>
-            <span style={{ color: t.accent }}>{s.calPivot}</span>
+            <span style={{ color: t.focus }}>{s.calPivot}</span>
             <span style={{ textAlign: 'left', whiteSpace: 'pre' }}>{s.calPost}</span>
           </div>
           <div style={{ marginTop: 34, font: '500 12px/1 ui-monospace,Menlo,monospace', color: t.sub }}>

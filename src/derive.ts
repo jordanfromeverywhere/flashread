@@ -70,7 +70,7 @@ export function derive(s: ReaderState): Derived {
       const rd = k < s.idx
       const style: CSSProperties = isCur
         ? {
-            background: t.accentSoft,
+            background: t.focusSoft,
             color: t.text,
             fontWeight: 700,
             borderRadius: 4,

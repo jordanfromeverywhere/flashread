@@ -58,7 +58,7 @@ export function IntakePanel({ s, d, a }: { s: ReaderState; d: Derived; a: Reader
                 cursor: 'pointer',
                 border: `1px solid ${s.voiceOn ? t.accent : t.border}`,
                 background: s.voiceOn ? t.accent : 'transparent',
-                color: s.voiceOn ? '#fff' : t.text,
+                color: s.voiceOn ? t.bg : t.text,
                 flex: 'none',
               }}
             >
