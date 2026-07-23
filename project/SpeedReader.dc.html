@@ -1,0 +1,844 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#d9d5cd}
+a{color:inherit}
+input[type=range]{-webkit-appearance:none;appearance:none;height:4px;border-radius:3px;outline:none;cursor:pointer;accent-color:currentColor;background:rgba(128,128,128,.3)}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:22px;height:22px;border-radius:50%;background:currentColor;cursor:pointer;border:none}
+input[type=range]::-moz-range-thumb{width:22px;height:22px;border-radius:50%;background:currentColor;cursor:pointer;border:none}
+textarea,input{font-family:inherit}
+input[type=number]::-webkit-inner-spin-button,input[type=number]::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}
+::-webkit-scrollbar{width:0;height:0}
+@keyframes srfade{from{opacity:0}to{opacity:1}}
+@keyframes srsheet{from{transform:translateY(100%)}to{transform:translateY(0)}}
+@keyframes srrise{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+@keyframes srtoast{from{opacity:0;transform:translate(-50%,-14px)}to{opacity:1;transform:translate(-50%,0)}}
+</style>
+</helmet>
+<div style="min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px">
+<x-import component-from-global-scope="IOSDevice" from="./ios-frame.jsx" dark="{{ isDark }}" hint-size="402px,874px">
+
+  <div style="position:relative;height:100%;display:flex;flex-direction:column;overflow:hidden;background:{{ t.bg }};color:{{ t.text }};font-family:-apple-system,'Helvetica Neue',Helvetica,sans-serif;transition:background .25s ease,color .25s ease">
+
+    <!-- top bar -->
+    <div style="flex:none;display:flex;align-items:center;gap:10px;padding:60px 20px 6px;transition:opacity .3s ease;opacity:{{ chromeOp }};pointer-events:{{ chromePe }}">
+      <div style="width:9px;height:9px;border-radius:50%;background:{{ t.accent }};flex:none"></div>
+      <div style="font:400 12px/1.3 ui-monospace,Menlo,monospace;color:{{ t.sub }};flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ headerTitle }}</div>
+      <button onClick="{{ openSettings }}" title="Text options" style="width:42px;height:38px;display:flex;align-items:baseline;justify-content:center;color:{{ t.text }};background:transparent;border:1px solid {{ t.border }};border-radius:11px;cursor:pointer;font:700 16px/1 Georgia,serif;padding-top:9px">A<span style="font-size:11px">a</span></button>
+      <button onClick="{{ quickTheme }}" title="Theme" style="width:38px;height:38px;display:flex;align-items:center;justify-content:center;color:{{ t.text }};background:transparent;border:1px solid {{ t.border }};border-radius:11px;cursor:pointer;font-size:15px">{{ themeGlyph }}</button>
+    </div>
+
+    <sc-if value="{{ toastShow }}" hint-placeholder-val="{{ false }}">
+      <div onClick="{{ dismissToast }}" style="position:absolute;top:66px;left:50%;transform:translateX(-50%);z-index:90;display:flex;align-items:center;gap:11px;padding:11px 16px;border-radius:14px;background:{{ t.accent }};color:{{ t.bg }};box-shadow:0 12px 34px rgba(0,0,0,.4);animation:srtoast .32s cubic-bezier(.32,.72,0,1);max-width:310px;cursor:pointer">
+        <span style="font-size:15px">✦</span>
+        <div><div style="font:700 13.5px/1.2 sans-serif">{{ toastTitle }}</div><div style="font:500 11px/1.3 sans-serif;opacity:.85">{{ toastSub }}</div></div>
+      </div>
+    </sc-if>
+    <!-- reading canvas -->
+    <div onPointerDown="{{ holdStart }}" onPointerUp="{{ holdEnd }}" onPointerLeave="{{ holdEnd }}" onPointerCancel="{{ holdEnd }}" style="flex:1;position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:0;padding:10px 18px;overflow:hidden;cursor:pointer;user-select:none;-webkit-user-select:none;touch-action:none">
+      <sc-if value="{{ hasText }}" hint-placeholder-val="{{ true }}">
+        <div style="flex:1;align-self:stretch;width:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:0">
+          <div style="flex:none;font:600 10px/1 ui-monospace,Menlo,monospace;letter-spacing:.2em;text-transform:uppercase;color:{{ t.sub }};margin-bottom:12px;transition:opacity .3s ease;opacity:{{ chromeOp }}">{{ modeLabel }}</div>
+          <sc-if value="{{ flashMode }}" hint-placeholder-val="{{ true }}">
+            <div style="position:relative;flex:1;width:100%;min-height:0;display:flex;align-items:center;justify-content:center">
+              <div style="position:relative;width:100%;max-width:312px;height:100%;overflow:hidden;transition:opacity .16s ease;opacity:{{ paraOpacity }};-webkit-mask-image:linear-gradient(to bottom,transparent 0,#000 17%,#000 83%,transparent 100%);mask-image:linear-gradient(to bottom,transparent 0,#000 17%,#000 83%,transparent 100%)">
+                <div ref="{{ innerRef }}" style="position:absolute;left:0;right:0;top:0;font-family:{{ fontFamily }};font-size:{{ flowSize }}px;line-height:1.7;text-align:left;will-change:transform">
+                  <sc-for list="{{ flowWords }}" as="w" hint-placeholder-count="24"><span data-cur="{{ w.mark }}" style="{{ w.style }}">{{ w.text }}</span></sc-for>
+                </div>
+              </div>
+              <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:{{ t.bg }};transition:opacity .16s ease;opacity:{{ wordOverlayOpacity }};pointer-events:none">
+                <div style="position:relative;width:100%;height:{{ bandH }}px;display:flex;align-items:center;justify-content:center;overflow:hidden">
+                  <div style="position:absolute;left:50%;top:0;transform:translateX(-50%);width:2px;height:16px;background:{{ t.accent }};opacity:.8"></div>
+                  <div style="position:absolute;left:50%;bottom:0;transform:translateX(-50%);width:2px;height:16px;background:{{ t.accent }};opacity:.8"></div>
+                  <div style="position:absolute;left:0;right:0;top:16px;height:1px;background:{{ t.border }};opacity:.5"></div>
+                  <div style="position:absolute;left:0;right:0;bottom:16px;height:1px;background:{{ t.border }};opacity:.5"></div>
+                  <div style="display:grid;grid-template-columns:1fr auto 1fr;width:100%;align-items:baseline;font-family:{{ fontFamily }};font-size:{{ size }}px;font-weight:{{ weight }};line-height:1;letter-spacing:-.01em">
+                    <span style="text-align:right;white-space:pre">{{ pre }}</span>
+                    <span style="color:{{ t.accent }}">{{ pivotCh }}</span>
+                    <span style="text-align:left;white-space:pre">{{ post }}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </sc-if>
+          <sc-if value="{{ flowMode }}" hint-placeholder-val="{{ false }}">
+            <div style="position:relative;flex:1;width:100%;max-width:312px;min-height:0;overflow:hidden;-webkit-mask-image:linear-gradient(to bottom,transparent 0,#000 17%,#000 83%,transparent 100%);mask-image:linear-gradient(to bottom,transparent 0,#000 17%,#000 83%,transparent 100%)">
+              <div ref="{{ innerRef }}" style="position:absolute;left:0;right:0;top:0;font-family:{{ fontFamily }};font-size:{{ flowSize }}px;line-height:1.7;text-align:left;will-change:transform">
+                <sc-for list="{{ flowWords }}" as="w" hint-placeholder-count="24"><span data-cur="{{ w.mark }}" style="{{ w.style }}">{{ w.text }}</span></sc-for>
+              </div>
+            </div>
+          </sc-if>
+          <sc-if value="{{ showHoldHint }}" hint-placeholder-val="{{ false }}">
+            <div style="flex:none;margin-top:14px;display:flex;align-items:center;gap:8px;font:600 12px/1 sans-serif;color:{{ t.sub }};animation:srfade .4s ease"><span style="width:9px;height:9px;border-radius:50%;background:{{ t.accent }}"></span>Press &amp; hold to read · or hold Space</div>
+          </sc-if>
+        </div>
+      </sc-if>
+      <sc-if value="{{ noText }}" hint-placeholder-val="{{ true }}">
+        <div style="text-align:center;animation:srrise .4s ease">
+          <div style="font:400 33px/1.15 Georgia,serif;letter-spacing:-.02em;margin-bottom:12px">Read at the <span style="color:{{ t.accent }}">speed</span> of thought.</div>
+          <p style="font:400 14px/1.6 sans-serif;color:{{ t.sub }};margin:0 auto 24px;max-width:280px">One word at a time, pinned to the spot your eye already looks. Load something and press play.</p>
+          <div style="display:flex;flex-direction:column;gap:10px;align-items:center">
+            <sc-if value="{{ resumeShow }}" hint-placeholder-val="{{ false }}">
+              <button onClick="{{ resumeOpen }}" style="display:flex;flex-direction:column;gap:2px;align-items:flex-start;text-align:left;min-width:210px;color:{{ t.bg }};background:{{ t.accent }};border:none;border-radius:12px;padding:12px 18px;cursor:pointer"><span style="font:600 10px/1 ui-monospace,Menlo,monospace;letter-spacing:.1em;opacity:.85">CONTINUE · {{ resumePct }}%</span><span style="font:700 14px/1.25 sans-serif;max-width:186px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ resumeTitle }}</span></button>
+            </sc-if>
+            <button onClick="{{ openIntake }}" style="font:600 14px/1 sans-serif;background:transparent;border:1px solid {{ t.border }};border-radius:12px;padding:14px 26px;cursor:pointer;min-width:210px;color:{{ t.text }}">Add something to read</button>
+            <button onClick="{{ loadSample }}" style="font:600 14px/1 sans-serif;color:{{ t.text }};background:transparent;border:1px solid {{ t.border }};border-radius:12px;padding:14px 26px;cursor:pointer;min-width:210px">Try a sample</button>
+            <button onClick="{{ openCalibrate }}" style="font:600 13px/1 sans-serif;color:{{ t.sub }};background:transparent;border:none;padding:8px;cursor:pointer">Calibrate my speed →</button>
+          </div>
+        </div>
+      </sc-if>
+      <sc-if value="{{ showQuizFab }}" hint-placeholder-val="{{ false }}">
+        <button onClick="{{ openQuiz }}" onPointerDown="{{ stop }}" onPointerUp="{{ stop }}" style="position:absolute;bottom:6px;right:8px;font:600 12px/1 sans-serif;color:{{ t.bg }};background:{{ t.accent }};border:none;border-radius:20px;padding:11px 15px;cursor:pointer;box-shadow:0 6px 18px rgba(0,0,0,.28);animation:srrise .3s ease">Test comprehension</button>
+      </sc-if>
+    </div>
+
+    <!-- control card -->
+    <sc-if value="{{ hasText }}" hint-placeholder-val="{{ true }}">
+      <div style="flex:none;padding:6px 20px 8px;transition:opacity .3s ease;opacity:{{ chromeOp }};pointer-events:{{ chromePe }}">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
+          <div style="font:500 10.5px/1 ui-monospace,Menlo,monospace;color:{{ t.sub }};width:46px;text-align:right">{{ posLabel }}</div>
+          <div onClick="{{ onScrub }}" style="flex:1;height:6px;border-radius:4px;background:{{ t.border }};position:relative;cursor:pointer">
+            <div style="position:absolute;left:0;top:0;bottom:0;width:{{ pctW }};background:{{ t.accent }};border-radius:4px"></div>
+          </div>
+          <div style="font:500 10.5px/1 ui-monospace,Menlo,monospace;color:{{ t.sub }};width:52px">{{ remainLabel }}</div>
+        </div>
+        <div style="display:flex;align-items:center;justify-content:center;gap:12px;margin-bottom:14px">
+          <button onClick="{{ rewindSentence }}" title="Rewind one sentence" style="width:48px;height:48px;display:flex;align-items:center;justify-content:center;color:{{ t.text }};background:transparent;border:1px solid {{ t.border }};border-radius:14px;cursor:pointer;font-size:18px">⤺</button>
+          <button onClick="{{ stepBack }}" title="Back one word" style="width:48px;height:48px;display:flex;align-items:center;justify-content:center;color:{{ t.text }};background:transparent;border:1px solid {{ t.border }};border-radius:14px;cursor:pointer;font-size:16px">◄</button>
+          <button onClick="{{ toggle }}" title="Play / pause" style="width:70px;height:62px;display:flex;align-items:center;justify-content:center;color:{{ t.bg }};background:{{ t.accent }};border:none;border-radius:18px;cursor:pointer;font-size:22px">{{ playGlyph }}</button>
+          <button onClick="{{ stepFwd }}" title="Forward one word" style="width:48px;height:48px;display:flex;align-items:center;justify-content:center;color:{{ t.text }};background:transparent;border:1px solid {{ t.border }};border-radius:14px;cursor:pointer;font-size:16px">►</button>
+          <button onClick="{{ restart }}" title="Restart" style="width:48px;height:48px;display:flex;align-items:center;justify-content:center;color:{{ t.text }};background:transparent;border:1px solid {{ t.border }};border-radius:14px;cursor:pointer;font-size:16px">↻</button>
+        </div>
+        <div style="display:flex;align-items:center;gap:14px;color:{{ t.accent }}">
+          <div style="display:flex;align-items:baseline;gap:3px;width:70px"><input type="number" min="100" max="1000" step="10" value="{{ wpm }}" onInput="{{ onWpmNum }}" onBlur="{{ onWpmBlur }}" style="width:46px;background:transparent;border:none;border-bottom:1px solid {{ t.border }};color:{{ t.accent }};font:700 17px/1.4 ui-monospace,Menlo,monospace;text-align:right;outline:none;-moz-appearance:textfield;padding:0"><span style="font:500 9px/1 sans-serif;color:{{ t.sub }}">wpm</span></div>
+          <input type="range" min="100" max="1000" step="10" value="{{ wpm }}" onInput="{{ onWpm }}" style="flex:1;color:{{ t.accent }}">
+          <button onClick="{{ toggleAudio }}" title="Read aloud in sync" style="{{ audioBtnStyle }}">{{ audioLabel }}</button>
+        </div>
+      </div>
+    </sc-if>
+
+    <!-- tab bar -->
+    <div style="flex:none;display:flex;align-items:flex-start;justify-content:space-around;padding:9px 12px 26px;border-top:1px solid {{ t.border }};background:{{ t.panel }};transition:opacity .3s ease;opacity:{{ chromeOp }};pointer-events:{{ chromePe }}">
+      <button onClick="{{ openReadTab }}" style="display:flex;flex-direction:column;align-items:center;gap:3px;background:none;border:none;cursor:pointer;padding:2px 6px;color:{{ tabRead }}">
+        <svg width="22" height="22" viewBox="0 0 22 22"><rect x="4" y="3.5" width="14" height="15" rx="1.6" fill="none" stroke="currentColor" stroke-width="1.7"></rect><line x1="11" y1="3.5" x2="11" y2="18.5" stroke="currentColor" stroke-width="1.7"></line></svg>
+        <span style="font:600 10px/1 sans-serif">Read</span>
+      </button>
+      <button onClick="{{ openLibrary }}" style="display:flex;flex-direction:column;align-items:center;gap:3px;background:none;border:none;cursor:pointer;padding:2px 6px;color:{{ tabLib }}">
+        <svg width="22" height="22" viewBox="0 0 22 22"><rect x="3" y="5" width="16" height="2.2" rx="1.1" fill="currentColor"></rect><rect x="3" y="9.9" width="16" height="2.2" rx="1.1" fill="currentColor"></rect><rect x="3" y="14.8" width="16" height="2.2" rx="1.1" fill="currentColor"></rect></svg>
+        <span style="font:600 10px/1 sans-serif">Library</span>
+      </button>
+      <button onClick="{{ openIntake }}" title="Add text" style="display:flex;flex-direction:column;align-items:center;background:none;border:none;cursor:pointer;padding:0 6px;margin-top:-14px">
+        <div style="width:52px;height:52px;border-radius:17px;background:{{ t.accent }};display:flex;align-items:center;justify-content:center;box-shadow:0 6px 16px rgba(0,0,0,.25)">
+          <svg width="24" height="24" viewBox="0 0 24 24"><rect x="11" y="5" width="2.4" height="14" rx="1.2" fill="{{ t.bg }}"></rect><rect x="5" y="10.8" width="14" height="2.4" rx="1.2" fill="{{ t.bg }}"></rect></svg>
+        </div>
+      </button>
+      <button onClick="{{ openStats }}" style="display:flex;flex-direction:column;align-items:center;gap:3px;background:none;border:none;cursor:pointer;padding:2px 6px;color:{{ tabStats }}">
+        <svg width="22" height="22" viewBox="0 0 22 22"><rect x="3" y="11" width="3.6" height="8" rx="1.2" fill="currentColor"></rect><rect x="9.2" y="6" width="3.6" height="13" rx="1.2" fill="currentColor"></rect><rect x="15.4" y="3" width="3.6" height="16" rx="1.2" fill="currentColor"></rect></svg>
+        <span style="font:600 10px/1 sans-serif">Stats</span>
+      </button>
+      <button onClick="{{ openSettings }}" style="display:flex;flex-direction:column;align-items:center;gap:3px;background:none;border:none;cursor:pointer;padding:2px 6px;color:{{ tabSet }}">
+        <svg width="22" height="22" viewBox="0 0 22 22"><line x1="3" y1="7" x2="19" y2="7" stroke="currentColor" stroke-width="1.8"></line><circle cx="8" cy="7" r="2.8" fill="currentColor"></circle><line x1="3" y1="15" x2="19" y2="15" stroke="currentColor" stroke-width="1.8"></line><circle cx="14" cy="15" r="2.8" fill="currentColor"></circle></svg>
+        <span style="font:600 10px/1 sans-serif">Settings</span>
+      </button>
+    </div>
+
+    <!-- ============ BOTTOM SHEET ============ -->
+    <sc-if value="{{ anyPanel }}" hint-placeholder-val="{{ false }}">
+      <div onClick="{{ closePanel }}" style="position:absolute;inset:0;z-index:80;background:rgba(0,0,0,.45);backdrop-filter:blur(2px);animation:srfade .2s ease"></div>
+      <div style="position:absolute;left:0;right:0;bottom:0;z-index:81;height:90%;background:{{ t.panel }};border-radius:24px 24px 0 0;box-shadow:0 -12px 40px rgba(0,0,0,.3);display:flex;flex-direction:column;animation:srsheet .28s cubic-bezier(.32,.72,0,1);overflow:hidden">
+        <div style="flex:none;display:flex;align-items:center;padding:12px 20px 10px">
+          <div style="position:absolute;left:50%;top:8px;transform:translateX(-50%);width:38px;height:5px;border-radius:3px;background:{{ t.border }}"></div>
+          <div style="font:700 19px/1 sans-serif;letter-spacing:-.01em;margin-top:6px">{{ panelTitle }}</div>
+          <button onClick="{{ closePanel }}" style="margin-left:auto;margin-top:6px;width:34px;height:34px;border-radius:10px;border:none;background:{{ t.border }};color:{{ t.text }};cursor:pointer;font-size:16px">✕</button>
+        </div>
+        <div style="flex:1;overflow:auto;padding:8px 20px 44px">
+
+          <!-- INTAKE -->
+          <sc-if value="{{ isIntake }}" hint-placeholder-val="{{ false }}">
+            <div>
+              <div style="display:flex;gap:6px;margin-bottom:16px">
+                <sc-for list="{{ intakeTabs }}" as="tab" hint-placeholder-count="4">
+                  <button onClick="{{ tab.onClick }}" style="{{ tab.style }}">{{ tab.label }}</button>
+                </sc-for>
+              </div>
+              <sc-if value="{{ tabPaste }}" hint-placeholder-val="{{ false }}">
+                <div>
+                  <textarea value="{{ pasteText }}" onInput="{{ onPaste }}" placeholder="Paste or type anything — an article, a chapter, your notes…" style="width:100%;height:160px;resize:none;padding:14px;border-radius:12px;border:1px solid {{ t.border }};background:{{ t.bg }};color:{{ t.text }};font:400 14px/1.6 Georgia,serif;outline:none"></textarea>
+                  <div style="display:flex;align-items:center;gap:10px;margin-top:10px">
+                    <button onClick="{{ toggleVoice }}" style="{{ voiceBtnStyle }}">{{ voiceLabel }}</button>
+                    <span style="font:400 11.5px/1.4 sans-serif;color:{{ t.sub }};flex:1">{{ voiceHint }}</span>
+                    <span style="font:500 10px/1 ui-monospace,Menlo,monospace;color:{{ t.sub }}">{{ pasteWordCount }} words</span>
+                  </div>
+                </div>
+              </sc-if>
+              <sc-if value="{{ tabPdf }}" hint-placeholder-val="{{ false }}">
+                <div>
+                  <label style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;height:170px;border:1.5px dashed {{ t.border }};border-radius:14px;cursor:pointer;color:{{ t.sub }}">
+                    <div style="width:36px;height:44px;border:2px solid {{ t.text }};border-radius:5px"></div>
+                    <div style="font:600 14px/1 sans-serif;color:{{ t.text }}">Choose a PDF</div>
+                    <div style="font:400 11.5px/1.4 sans-serif;text-align:center;max-width:230px">Extracted in your browser — nothing is uploaded.</div>
+                    <input type="file" accept="application/pdf" onChange="{{ onPdf }}" style="display:none">
+                  </label>
+                  <div style="margin-top:12px;font:400 12.5px/1.5 sans-serif;color:{{ t.sub }}">{{ pdfStatus }}</div>
+                </div>
+              </sc-if>
+              <sc-if value="{{ tabUrl }}" hint-placeholder-val="{{ false }}">
+                <div>
+                  <div style="display:flex;gap:8px">
+                    <input value="{{ urlText }}" onInput="{{ onUrl }}" placeholder="https://example.com/article" style="flex:1;padding:13px 14px;border-radius:11px;border:1px solid {{ t.border }};background:{{ t.bg }};color:{{ t.text }};font:400 14px/1 sans-serif;outline:none">
+                    <button onClick="{{ fetchUrl }}" style="font:600 13px/1 sans-serif;color:{{ t.bg }};background:{{ t.text }};border:none;border-radius:11px;padding:0 18px;cursor:pointer">Fetch</button>
+                  </div>
+                  <div style="margin-top:12px;font:400 12.5px/1.5 sans-serif;color:{{ t.sub }}">{{ urlStatus }}</div>
+                  <div style="margin-top:18px;padding-top:16px;border-top:1px solid {{ t.border }}">
+                    <div style="font:700 13px/1 sans-serif;margin-bottom:7px">Bookmarklet fallback</div>
+                    <p style="font:400 12px/1.6 sans-serif;color:{{ t.sub }};margin:0 0 10px">Many sites block direct fetching. On a computer, drag this to your bookmarks bar, click it on any article, and its text is copied — then paste it here.</p>
+                    <a href="{{ bookmarklet }}" onClick="{{ preventNav }}" style="display:inline-block;font:600 12.5px/1 sans-serif;color:{{ t.accent }};border:1px solid {{ t.accent }};border-radius:9px;padding:10px 15px;text-decoration:none">Grab article → Flashread</a>
+                  </div>
+                </div>
+              </sc-if>
+              <div style="display:flex;gap:10px;margin-top:18px;padding-top:16px;border-top:1px solid {{ t.border }}">
+                <input value="{{ draftTitle }}" onInput="{{ onDraftTitle }}" placeholder="Title (optional)" style="flex:1;padding:13px;border-radius:11px;border:1px solid {{ t.border }};background:{{ t.bg }};color:{{ t.text }};font:400 13px/1 sans-serif;outline:none">
+                <button onClick="{{ startReading }}" style="font:600 13px/1 sans-serif;color:{{ t.bg }};background:{{ t.accent }};border:none;border-radius:11px;padding:0 20px;cursor:pointer">Read →</button>
+              </div>
+              <div style="margin-top:20px;padding-top:16px;border-top:1px solid {{ t.border }}">
+                <div style="font:600 11px/1 ui-monospace,Menlo,monospace;color:{{ t.sub }};text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">A place to start</div>
+                <sc-for list="{{ starters }}" as="sx" hint-placeholder-count="3">
+                  <div onClick="{{ sx.onClick }}" style="display:flex;align-items:center;gap:12px;padding:13px 2px;border-bottom:1px solid {{ t.border }};cursor:pointer">
+                    <div style="flex:1;min-width:0"><div style="font:600 14px/1.3 sans-serif">{{ sx.title }}</div><div style="font:400 11px/1 ui-monospace,Menlo,monospace;color:{{ t.sub }};margin-top:4px">{{ sx.meta }}</div></div>
+                    <div style="font:600 12px/1 sans-serif;color:{{ t.accent }};flex:none">Read →</div>
+                  </div>
+                </sc-for>
+              </div>
+            </div>
+          </sc-if>
+
+          <!-- LIBRARY -->
+          <sc-if value="{{ isLibrary }}" hint-placeholder-val="{{ false }}">
+            <div>
+              <sc-if value="{{ libEmpty }}" hint-placeholder-val="{{ false }}">
+                <div style="text-align:center;padding:44px 20px;color:{{ t.sub }};font:400 14px/1.6 sans-serif">Nothing saved yet.<br>Anything you read is kept here with your exact position.</div>
+              </sc-if>
+              <sc-for list="{{ libraryView }}" as="it" hint-placeholder-count="3">
+                <div style="display:flex;align-items:center;gap:10px;padding:14px 2px;border-bottom:1px solid {{ t.border }}">
+                  <div style="flex:1;min-width:0">
+                    <sc-if value="{{ it.editing }}" hint-placeholder-val="{{ false }}">
+                      <div style="display:flex;gap:8px;align-items:center">
+                        <input value="{{ renameText }}" onInput="{{ renameChange }}" style="flex:1;min-width:0;padding:9px 10px;border-radius:8px;border:1px solid {{ t.accent }};background:{{ t.bg }};color:{{ t.text }};font:600 13px/1 sans-serif;outline:none">
+                        <button onClick="{{ renameSave }}" style="font:600 12px/1 sans-serif;color:{{ t.bg }};background:{{ t.accent }};border:none;border-radius:8px;padding:10px 13px;cursor:pointer;flex:none">Save</button>
+                      </div>
+                    </sc-if>
+                    <sc-if value="{{ it.notEditing }}" hint-placeholder-val="{{ true }}">
+                      <div onClick="{{ it.open }}">
+                        <div style="font:600 14.5px/1.3 sans-serif;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ it.title }}</div>
+                        <div style="font:400 11px/1 ui-monospace,Menlo,monospace;color:{{ t.sub }};margin-top:5px">{{ it.meta }}</div>
+                        <div style="height:4px;border-radius:3px;background:{{ t.border }};margin-top:8px;position:relative"><div style="position:absolute;left:0;top:0;bottom:0;width:{{ it.pctW }};background:{{ t.accent }};border-radius:3px"></div></div>
+                      </div>
+                    </sc-if>
+                  </div>
+                  <sc-if value="{{ it.notEditing }}" hint-placeholder-val="{{ true }}">
+                    <button onClick="{{ it.rename }}" title="Rename" style="width:34px;height:34px;border-radius:9px;border:1px solid {{ t.border }};background:transparent;color:{{ t.sub }};cursor:pointer;flex:none;font-size:13px">✎</button>
+                    <button onClick="{{ it.open }}" style="font:600 12px/1 sans-serif;color:{{ t.bg }};background:{{ t.text }};border:none;border-radius:9px;padding:10px 12px;cursor:pointer;flex:none">{{ it.cta }}</button>
+                    <button onClick="{{ it.remove }}" title="Delete" style="width:34px;height:34px;border-radius:9px;border:1px solid {{ t.border }};background:transparent;color:{{ t.sub }};cursor:pointer;flex:none">✕</button>
+                  </sc-if>
+                </div>
+              </sc-for>
+            </div>
+          </sc-if>
+
+          <!-- SETTINGS -->
+          <sc-if value="{{ isSettings }}" hint-placeholder-val="{{ false }}">
+            <div style="display:flex;flex-direction:column;gap:22px">
+              <div>
+                <div style="font:600 11px/1 ui-monospace,Menlo,monospace;color:{{ t.sub }};text-transform:uppercase;letter-spacing:.05em;margin-bottom:11px">Theme</div>
+                <div style="display:flex;gap:8px;flex-wrap:wrap"><sc-for list="{{ themeOpts }}" as="th" hint-placeholder-count="4"><button onClick="{{ th.onClick }}" style="{{ th.style }}">{{ th.label }}</button></sc-for></div>
+              </div>
+              <div>
+                <div style="font:600 11px/1 ui-monospace,Menlo,monospace;color:{{ t.sub }};text-transform:uppercase;letter-spacing:.05em;margin-bottom:11px">Typeface</div>
+                <div style="display:flex;gap:8px;flex-wrap:wrap"><sc-for list="{{ fontOpts }}" as="f" hint-placeholder-count="4"><button onClick="{{ f.onClick }}" style="{{ f.style }}">{{ f.label }}</button></sc-for></div>
+              </div>
+              <div>
+                <div style="font:600 11px/1 ui-monospace,Menlo,monospace;color:{{ t.sub }};text-transform:uppercase;letter-spacing:.05em;margin-bottom:11px">Reading mode</div>
+                <div style="display:flex;gap:8px;flex-wrap:wrap"><sc-for list="{{ modeOpts }}" as="m" hint-placeholder-count="2"><button onClick="{{ m.onClick }}" style="{{ m.style }}">{{ m.label }}</button></sc-for></div>
+              </div>
+              <div style="display:flex;gap:22px">
+                <div style="flex:1">
+                  <div style="display:flex;justify-content:space-between;font:600 11px/1 ui-monospace,Menlo,monospace;color:{{ t.sub }};text-transform:uppercase;letter-spacing:.05em;margin-bottom:11px"><span>Size</span><span>{{ size }}</span></div>
+                  <input type="range" min="24" max="72" step="2" value="{{ size }}" onInput="{{ onSize }}" style="width:100%;color:{{ t.accent }}">
+                </div>
+                <div style="flex:1">
+                  <div style="display:flex;justify-content:space-between;font:600 11px/1 ui-monospace,Menlo,monospace;color:{{ t.sub }};text-transform:uppercase;letter-spacing:.05em;margin-bottom:11px"><span>Weight</span><span>{{ weight }}</span></div>
+                  <input type="range" min="300" max="800" step="100" value="{{ weight }}" onInput="{{ onWeight }}" style="width:100%;color:{{ t.accent }}">
+                </div>
+              </div>
+              <div>
+                <div style="font:600 11px/1 ui-monospace,Menlo,monospace;color:{{ t.sub }};text-transform:uppercase;letter-spacing:.05em;margin-bottom:11px">Words per flash</div>
+                <div style="display:flex;gap:8px"><sc-for list="{{ chunkOpts }}" as="c" hint-placeholder-count="3"><button onClick="{{ c.onClick }}" style="{{ c.style }}">{{ c.label }}</button></sc-for></div>
+              </div>
+              <div>
+                <div style="font:600 11px/1 ui-monospace,Menlo,monospace;color:{{ t.sub }};text-transform:uppercase;letter-spacing:.05em;margin-bottom:11px">Pause length at punctuation</div>
+                <div style="display:flex;gap:8px"><sc-for list="{{ pauseOpts }}" as="p" hint-placeholder-count="3"><button onClick="{{ p.onClick }}" style="{{ p.style }}">{{ p.label }}</button></sc-for></div>
+              </div>
+              <sc-if value="{{ hasVoices }}" hint-placeholder-val="{{ false }}">
+                <div>
+                  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:11px"><div style="font:600 11px/1 ui-monospace,Menlo,monospace;color:{{ t.sub }};text-transform:uppercase;letter-spacing:.05em">Narration voice</div><button onClick="{{ previewVoice }}" style="font:600 11px/1 sans-serif;color:{{ t.accent }};background:transparent;border:1px solid {{ t.accent }};border-radius:8px;padding:7px 11px;cursor:pointer">Preview</button></div>
+                  <div style="display:flex;gap:8px;flex-wrap:wrap"><sc-for list="{{ voiceOpts }}" as="v" hint-placeholder-count="3"><button onClick="{{ v.onClick }}" style="{{ v.style }}">{{ v.label }}</button></sc-for></div>
+                  <div style="font:400 11px/1.4 sans-serif;color:{{ t.sub }};margin-top:8px">Uses the best voice your device provides, generated on-device as you read. Voices marked ✦ are the highest quality.</div>
+                </div>
+              </sc-if>
+              <div style="display:flex;flex-direction:column;gap:16px">
+                <label style="display:flex;align-items:center;gap:12px;cursor:pointer" onClick="{{ togglePacing }}"><div style="{{ pacingSw }}"><div style="{{ pacingKnob }}"></div></div><div><div style="font:600 13.5px/1.2 sans-serif">Adaptive pacing</div><div style="font:400 11.5px/1.35 sans-serif;color:{{ t.sub }}">Long & complex words linger, sentence ends breathe, short words fly.</div></div></label>
+                <label style="display:flex;align-items:center;gap:12px;cursor:pointer" onClick="{{ toggleEase }}"><div style="{{ easeSw }}"><div style="{{ easeKnob }}"></div></div><div><div style="font:600 13.5px/1.2 sans-serif">Ease-in ramp</div><div style="font:400 11.5px/1.35 sans-serif;color:{{ t.sub }}">Each session starts slower and accelerates to your target.</div></div></label>
+                <label style="display:flex;align-items:center;gap:12px;cursor:pointer" onClick="{{ toggleFocus }}"><div style="{{ focusSw }}"><div style="{{ focusKnob }}"></div></div><div><div style="font:600 13.5px/1.2 sans-serif">Focus mode</div><div style="font:400 11.5px/1.35 sans-serif;color:{{ t.sub }}">Fade the controls while playing. Tap the screen to bring them back.</div></div></label>
+              </div>
+              <button onClick="{{ openCalibrate }}" style="font:600 13.5px/1 sans-serif;color:{{ t.text }};background:transparent;border:1px solid {{ t.border }};border-radius:12px;padding:14px;cursor:pointer">Calibrate my reading speed</button>
+              <div style="font:400 11px/1.5 sans-serif;color:{{ t.sub }}">Offline: {{ swStatus }}</div>
+            </div>
+          </sc-if>
+
+          <!-- CALIBRATE -->
+          <sc-if value="{{ isCalibrate }}" hint-placeholder-val="{{ false }}">
+            <div style="text-align:center;padding-top:10px">
+              <sc-if value="{{ calIdle }}" hint-placeholder-val="{{ false }}">
+                <div>
+                  <p style="font:400 14px/1.6 sans-serif;color:{{ t.sub }};margin:0 auto 22px;max-width:300px">A fixed passage plays at a chosen pace. Keep up with comprehension? Bump it up. Land on the speed you can sustain.</p>
+                  <div style="display:flex;align-items:center;justify-content:center;gap:12px;margin-bottom:24px;color:{{ t.accent }}">
+                    <input type="range" min="150" max="800" step="25" value="{{ calWpm }}" onInput="{{ onCalWpm }}" style="width:180px;color:{{ t.accent }}">
+                    <span style="font:700 16px/1 ui-monospace,Menlo,monospace;color:{{ t.accent }};width:56px;text-align:left">{{ calWpm }}</span>
+                  </div>
+                  <button onClick="{{ runCalibration }}" style="font:600 14px/1 sans-serif;color:{{ t.bg }};background:{{ t.accent }};border:none;border-radius:12px;padding:15px 30px;cursor:pointer">Run test</button>
+                </div>
+              </sc-if>
+              <sc-if value="{{ calRunning }}" hint-placeholder-val="{{ false }}">
+                <div style="padding:30px 0">
+                  <div style="display:grid;grid-template-columns:1fr auto 1fr;align-items:baseline;font-family:{{ fontFamily }};font-size:46px;font-weight:{{ weight }};line-height:1"><span style="text-align:right;white-space:pre">{{ calPre }}</span><span style="color:{{ t.accent }}">{{ calPivot }}</span><span style="text-align:left;white-space:pre">{{ calPost }}</span></div>
+                  <div style="margin-top:34px;font:500 12px/1 ui-monospace,Menlo,monospace;color:{{ t.sub }}">{{ calWpm }} WPM</div>
+                </div>
+              </sc-if>
+              <sc-if value="{{ calDone }}" hint-placeholder-val="{{ false }}">
+                <div style="padding-top:16px">
+                  <p style="font:400 15px/1.6 sans-serif;margin:0 0 6px">You read that at</p>
+                  <div style="font:700 50px/1 ui-monospace,Menlo,monospace;color:{{ t.accent }};margin-bottom:8px">{{ calWpm }}</div>
+                  <p style="font:400 13px/1.5 sans-serif;color:{{ t.sub }};margin:0 auto 24px;max-width:260px">Comfortable? Set it. Felt rushed? Run again slower.</p>
+                  <div style="display:flex;gap:10px;justify-content:center"><button onClick="{{ acceptCal }}" style="font:600 13px/1 sans-serif;color:{{ t.bg }};background:{{ t.accent }};border:none;border-radius:11px;padding:14px 20px;cursor:pointer">Use {{ calWpm }} WPM</button><button onClick="{{ resetCal }}" style="font:600 13px/1 sans-serif;color:{{ t.text }};background:transparent;border:1px solid {{ t.border }};border-radius:11px;padding:14px 20px;cursor:pointer">Again</button></div>
+                </div>
+              </sc-if>
+            </div>
+          </sc-if>
+
+          <!-- STATS -->
+          <sc-if value="{{ isStats }}" hint-placeholder-val="{{ false }}">
+            <div>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:22px">
+                <sc-for list="{{ statCards }}" as="s" hint-placeholder-count="4"><div style="padding:16px;border:1px solid {{ t.border }};border-radius:14px"><div style="font:700 26px/1 ui-monospace,Menlo,monospace;color:{{ t.accent }}">{{ s.value }}</div><div style="font:500 11px/1.3 sans-serif;color:{{ t.sub }};margin-top:6px">{{ s.label }}</div></div></sc-for>
+              </div>
+              <div style="font:600 11px/1 ui-monospace,Menlo,monospace;color:{{ t.sub }};text-transform:uppercase;letter-spacing:.05em;margin-bottom:11px">Recent WPM</div>
+              <div style="display:flex;align-items:flex-end;gap:5px;height:100px;padding:10px;border:1px solid {{ t.border }};border-radius:14px;margin-bottom:22px">
+                <sc-if value="{{ noHistory }}" hint-placeholder-val="{{ false }}"><div style="margin:auto;font:400 12.5px/1 sans-serif;color:{{ t.sub }}">Finish a read to start tracking.</div></sc-if>
+                <sc-for list="{{ wpmBars }}" as="b" hint-placeholder-count="6"><div title="{{ b.title }}" style="flex:1;background:{{ t.accent }};border-radius:3px 3px 0 0;height:{{ b.h }};min-height:4px;opacity:.85"></div></sc-for>
+              </div>
+              <div style="font:600 11px/1 ui-monospace,Menlo,monospace;color:{{ t.sub }};text-transform:uppercase;letter-spacing:.05em;margin-bottom:11px">Comprehension vs. speed</div>
+              <sc-if value="{{ noQuizzes }}" hint-placeholder-val="{{ false }}"><div style="font:400 12.5px/1.5 sans-serif;color:{{ t.sub }}">Take a quiz after a read to see how comprehension holds up as you speed up.</div></sc-if>
+              <sc-for list="{{ compRows }}" as="c" hint-placeholder-count="3"><div style="display:flex;align-items:center;gap:12px;padding:8px 0;border-bottom:1px solid {{ t.border }}"><div style="font:600 12.5px/1 ui-monospace,Menlo,monospace;width:74px">{{ c.wpm }} wpm</div><div style="flex:1;height:8px;border-radius:5px;background:{{ t.border }};position:relative"><div style="position:absolute;left:0;top:0;bottom:0;width:{{ c.w }};background:{{ c.color }};border-radius:5px"></div></div><div style="font:600 12.5px/1 ui-monospace,Menlo,monospace;width:42px;text-align:right;color:{{ c.color }}">{{ c.score }}%</div></div></sc-for>
+            </div>
+          </sc-if>
+
+          <!-- QUIZ -->
+          <sc-if value="{{ isQuiz }}" hint-placeholder-val="{{ false }}">
+            <div>
+              <sc-if value="{{ quizLoading }}" hint-placeholder-val="{{ false }}"><div style="text-align:center;padding:50px 0;color:{{ t.sub }};font:400 14px/1.5 sans-serif">Writing questions from what you just read…</div></sc-if>
+              <sc-if value="{{ quizError }}" hint-placeholder-val="{{ false }}"><div style="text-align:center;padding:40px 10px;color:{{ t.sub }};font:400 13.5px/1.6 sans-serif">{{ quizErrorMsg }}</div></sc-if>
+              <sc-if value="{{ quizReady }}" hint-placeholder-val="{{ false }}">
+                <div style="display:flex;flex-direction:column;gap:20px">
+                  <sc-for list="{{ quizView }}" as="q" hint-placeholder-count="3">
+                    <div>
+                      <div style="font:600 14.5px/1.5 sans-serif;margin-bottom:10px">{{ q.n }}. {{ q.question }}</div>
+                      <div style="display:flex;flex-direction:column;gap:7px"><sc-for list="{{ q.choices }}" as="ch" hint-placeholder-count="4"><button onClick="{{ ch.onClick }}" style="{{ ch.style }}">{{ ch.text }}</button></sc-for></div>
+                    </div>
+                  </sc-for>
+                  <sc-if value="{{ quizGraded }}" hint-placeholder-val="{{ false }}"><div style="text-align:center;padding:16px;border:1px solid {{ t.border }};border-radius:14px;background:{{ t.bg }}"><div style="font:700 30px/1 ui-monospace,Menlo,monospace;color:{{ t.accent }}">{{ quizScore }}%</div><div style="font:400 12.5px/1.4 sans-serif;color:{{ t.sub }};margin-top:6px">at {{ wpm }} WPM · {{ quizVerdict }}</div></div></sc-if>
+                  <button onClick="{{ submitQuiz }}" style="{{ quizSubmitStyle }}">{{ quizSubmitLabel }}</button>
+                </div>
+              </sc-if>
+            </div>
+          </sc-if>
+
+        </div>
+      </div>
+    </sc-if>
+
+  </div>
+</x-import>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:&quot;100%&quot;,&quot;height&quot;:&quot;100%&quot;}}">
+const THEMES = {
+  dark:{bg:'#0e0d0c',panel:'#1a1917',text:'#f3efe7',sub:'#8f887d',accent:'#e5484d',accentSoft:'rgba(229,72,77,.18)',border:'rgba(255,255,255,.12)'},
+  light:{bg:'#f4efe6',panel:'#fffdf7',text:'#26221b',sub:'#7a7266',accent:'#cf3339',accentSoft:'rgba(207,51,57,.14)',border:'rgba(0,0,0,.12)'},
+  sepia:{bg:'#e9ddc7',panel:'#f5ecd8',text:'#463b28',sub:'#8a7c60',accent:'#b04a24',accentSoft:'rgba(176,74,36,.16)',border:'rgba(70,59,40,.18)'},
+  hc:{bg:'#000000',panel:'#0b0b0b',text:'#ffffff',sub:'#c9c9c9',accent:'#ff3b3b',accentSoft:'rgba(255,59,59,.25)',border:'rgba(255,255,255,.35)'}
+};
+const THEME_LABELS = {dark:'Dark',light:'Light',sepia:'Sepia',hc:'OLED'};
+const FONTS = {
+  sans:{label:'Sans',family:"'Helvetica Neue',Helvetica,Arial,sans-serif"},
+  serif:{label:'Serif',family:"Georgia,'Times New Roman',serif"},
+  mono:{label:'Mono',family:"ui-monospace,'SF Mono',Menlo,monospace"},
+  legible:{label:'Legible',family:"'Atkinson Hyperlegible',sans-serif"}
+};
+const PAUSE_SCALE = {subtle:0.6, natural:1, long:1.6};
+const SAMPLE = "Rapid serial visual presentation flashes words one at a time at a single fixed point. Because your eyes never travel across a line, you spend no time on the small jumps between words, and none on drifting backward to reread. What remains is recognition itself. Each word is aligned on its optimal recognition point, the spot a fraction left of center where the eye lands most naturally, marked here in red. Try nudging the speed upward. You will likely find you can follow far faster than you read on paper, because most of ordinary reading is motion, not thought. Start slow, trust the rhythm, and let the words come to you.";
+const CAL_PASSAGE = "The lighthouse keeper kept a journal for forty years. He recorded the weather, the ships that passed, and the strange green light he swore he saw on moonless nights. When the automatic lamp replaced him, the journal was found in a drawer, its final entry unfinished. Nobody knows what he meant to write, but the last two words were simply: it returns.";
+const STARTERS = [
+  {title:"Why your mind wanders", meta:"Essay · ~130 words", text:"Attention is less a spotlight you aim than a current you ride. Left alone, the mind drifts toward whatever is unresolved: a half-finished message, a worry, a sound in the next room. This wandering is not a flaw. It is the brain scanning for anything more urgent than the task in front of you. The trick is not to force focus but to remove the exits. Give the mind one clear thing to do, make that thing arrive a little faster than your doubts can, and the drifting quiets on its own. You are not broken for losing your place. You simply never gave your attention a reason to stay."},
+  {title:"The map that lied", meta:"Story · ~150 words", text:"The old atlas showed an island exactly where the sea was empty. Sailors had trusted it for a hundred years, steering wide around waters that held nothing at all. When a young captain finally sailed straight through, charting each fathom herself, she found only open blue and a school of silver fish. She kept the old map anyway, framed above her desk. It reminded her that a confident line on paper is not the same as the world, and that the fastest way forward is sometimes to test the thing everyone already believes."},
+  {title:"How to read faster", meta:"Guide · ~120 words", text:"Speed is mostly a matter of removing friction, not adding effort. Start slower than feels impressive and let the rhythm settle before you push the pace. Trust the red letter; keep your eyes still and let each word arrive. When a sentence ends, notice the small pause, then move on without rereading. If your mind slips, rewind one sentence rather than starting the page again. Do this for ten minutes a day and the comfortable numbers climb on their own. The goal was never to race. It was to spend your attention on meaning instead of motion."}
+];
+
+function tokenize(text){ return String(text||'').replace(/\s+/g,' ').trim().split(' ').filter(Boolean); }
+function tokenizeDoc(text){
+  const paras = String(text||'').replace(/\r/g,'').split(/\n{2,}/).map(p=>p.replace(/\n/g,' ').trim()).filter(Boolean);
+  const words=[], breaks=[];
+  paras.forEach(p=>{ const ws=p.split(/\s+/).filter(Boolean); ws.forEach((wd,j)=>{ words.push(wd); breaks.push(j===ws.length-1); }); });
+  return {words,breaks};
+}
+function orp(word){ const n=word.replace(/[^A-Za-z0-9]/g,'').length||word.length; if(n<=1)return 0; if(n<=5)return 1; if(n<=9)return 2; if(n<=13)return 3; return 4; }
+function splitPivot(str){ const p=orp(str); const i=Math.min(p,Math.max(0,str.length-1)); return {pre:str.slice(0,i),pivot:str.slice(i,i+1),post:str.slice(i+1)}; }
+function uid(){ return Date.now().toString(36)+Math.random().toString(36).slice(2,7); }
+function load(k,f){ try{const v=JSON.parse(localStorage.getItem(k)); return v==null?f:v;}catch(e){return f;} }
+function save(k,v){ try{localStorage.setItem(k,JSON.stringify(v));}catch(e){} }
+
+class Component extends DCLogic {
+  state = (()=>{
+    const s = load('sr_settings',{});
+    return {
+      theme:s.theme||'dark', font:s.font||'serif', size:s.size||44, weight:s.weight||500,
+      chunk:s.chunk||1, adaptive:s.adaptive!==false, showContext:!!s.showContext, wpm:s.wpm||300,
+      easeIn:s.easeIn!==false, focusMode:s.focusMode!==false, pauseScale:s.pauseScale||'natural', audioOn:!!s.audioOn, readMode:s.readMode||'flash',
+      words:[], breaks:[], idx:0, playing:false, currentId:null, title:'', chromeHidden:false, renameId:null, renameText:'',
+      panel:null, intakeTab:'paste',
+      pasteText:'', urlText:'', draftTitle:'', pdfStatus:'', urlStatus:'', voiceOn:false, voiceHint:'Tap to dictate (Chrome). Speak and it appends below.',
+      library: (function(){ const raw=load('sr_library',[]); const seen={}, out=[]; raw.forEach(x=>{ if(!x||!x.text) return; const k=x.text; if(seen[k]!=null){ const e=out[seen[k]]; if((x.idx||0)>(e.idx||0)) out[seen[k]]=x; } else { seen[k]=out.length; out.push(x); } }); return out; })(),
+      stats: load('sr_stats',{wordsRead:0,timeMs:0,sessions:0,history:[],comp:[],streak:0,lastDay:null}),
+      cal:'idle', calWpm:300, calPre:'',calPivot:'',calPost:'',
+      quiz:null, quizState:'idle', quizAnswers:{}, quizScore:null, quizErrorMsg:'',
+      voices:[], voiceURI:s.voiceURI||'', toast:null,
+      swStatus:'checking…'
+    };
+  })();
+
+  componentDidMount(){
+    if(window.pdfjsLib){ try{ pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js'; }catch(e){} }
+    window.addEventListener('keydown', this.onKey);
+    window.addEventListener('keyup', this.onKeyUp);
+    window.addEventListener('pointerdown', this.onPoke);
+    if(window.speechSynthesis){ this.loadVoices(); try{ window.speechSynthesis.onvoiceschanged=this.loadVoices; }catch(e){} }
+    save('sr_library', this.state.library);
+    if('serviceWorker' in navigator){
+      const src="self.addEventListener('install',e=>self.skipWaiting());self.addEventListener('activate',e=>self.clients.claim());self.addEventListener('fetch',e=>{e.respondWith(caches.open('sr-v1').then(c=>c.match(e.request).then(r=>r||fetch(e.request).then(res=>{try{c.put(e.request,res.clone())}catch(_){} return res}).catch(()=>r))))});";
+      const url=URL.createObjectURL(new Blob([src],{type:'text/javascript'}));
+      navigator.serviceWorker.register(url).then(()=>this.setState({swStatus:'on — cached for offline use'})).catch(()=>this.setState({swStatus:'unavailable here'}));
+    } else this.setState({swStatus:'unavailable'});
+  }
+  componentWillUnmount(){ clearTimeout(this.timer); clearTimeout(this._hideT); this.cancelAudio(); window.removeEventListener('keydown',this.onKey); window.removeEventListener('keyup',this.onKeyUp); window.removeEventListener('pointerdown',this.onPoke); this.persistProgress(); }
+
+  onKey = (e)=>{
+    if(this.state.panel) return;
+    const tag=(e.target.tagName||'').toLowerCase(); if(tag==='input'||tag==='textarea') return;
+    if(e.code==='Space'){ e.preventDefault(); if(e.repeat) return; if(!this.state.playing){ this._spaceHold=true; this.play(); } }
+    else if(e.code==='ArrowRight'){ e.preventDefault(); this.stepFwd(); }
+    else if(e.code==='ArrowLeft'){ e.preventDefault(); this.stepBack(); }
+    else if(e.code==='ArrowUp'){ e.preventDefault(); this.setWpm(Math.min(1000,this.state.wpm+25)); }
+    else if(e.code==='ArrowDown'){ e.preventDefault(); this.setWpm(Math.max(100,this.state.wpm-25)); }
+  };
+  onPoke = ()=>{ if(this._holding) return; if(this.state.playing && this.state.focusMode && this.state.chromeHidden) this.bumpHide(); };
+  onKeyUp = (e)=>{ if(e.code==='Space' && this._spaceHold){ this._spaceHold=false; if(this.state.playing) this.pause(); } };
+  holdStart = (e)=>{ if(!this.state.words.length || this.state.panel) return; this._holding=true; if(!this.state.playing) this.play(); this.setState({chromeHidden:true}); };
+  holdEnd = ()=>{ if(this._holding){ this._holding=false; if(this.state.playing) this.pause(); } };
+  innerRef = (n)=>{ this._inner=n; if(n) requestAnimationFrame(()=>this.syncScroll()); };
+  componentDidUpdate(){ this.syncScroll(); }
+  syncScroll(){
+    const inner=this._inner; if(!inner||!inner.parentElement) return;
+    const vp=inner.parentElement; const vpH=vp.clientHeight||220;
+    const cur=inner.querySelector('[data-cur="1"]');
+    const ty = cur ? (vpH/2 - (cur.offsetTop + cur.offsetHeight/2)) : 0;
+    inner.style.transition='transform .22s cubic-bezier(.4,0,.2,1)';
+    inner.style.transform='translateY('+ty+'px)';
+  }
+
+  persistSettings(extra){
+    const s={...this.state,...extra};
+    save('sr_settings',{theme:s.theme,font:s.font,size:s.size,weight:s.weight,chunk:s.chunk,adaptive:s.adaptive,showContext:s.showContext,wpm:s.wpm,easeIn:s.easeIn,focusMode:s.focusMode,pauseScale:s.pauseScale,audioOn:s.audioOn,readMode:s.readMode,voiceURI:s.voiceURI});
+  }
+  set = (patch)=>{ this.setState(patch, ()=>this.persistSettings()); };
+
+  syllables(w){
+    w=(w||'').toLowerCase().replace(/[^a-z]/g,''); if(w.length<=3) return w.length?1:0;
+    w=w.replace(/(?:[^laeiouy]es|ed|[^laeiouy]e)$/,'').replace(/^y/,'');
+    const m=w.match(/[aeiouy]{1,2}/g); return m?m.length:1;
+  }
+  dwell(i){
+    const s=this.state, w=s.words; if(!w[i]) return 0;
+    const chunk=s.chunk; const toks=w.slice(i,i+chunk);
+    let d=(60000/s.wpm)*chunk;
+    if(s.adaptive){
+      const last=toks[toks.length-1]||''; const joined=toks.join(' ');
+      const alpha=joined.replace(/[^A-Za-z0-9]/g,'').length;
+      let syl=1; toks.forEach(tk=>{ const c=this.syllables(tk); if(c>syl) syl=c; });
+      let f=1;
+      if(syl>=5) f*=1.6; else if(syl>=3) f*=1.3;
+      if(alpha<=2) f*=0.9;
+      if(/\d/.test(joined)) f*=1.4;
+      const scale=PAUSE_SCALE[s.pauseScale]||1;
+      if(s.breaks[i+chunk-1]) f*=(1+1.4*scale);
+      else if(/[.!?…]["')\]]?$/.test(last)) f*=(1+1.0*scale);
+      else if(/[,;:—-]$/.test(last)) f*=(1+0.5*scale);
+      d*=f;
+    }
+    if(s.easeIn && this._playIdx!=null){ const k=(i-this._playIdx)/chunk; if(k>=0 && k<10) d*=(1.8-0.8*(k/10)); }
+    return Math.min(3000, Math.max(55, d));
+  }
+  estRemaining(){ const w=this.state.words, chunk=this.state.chunk; let ms=0; for(let i=this.state.idx;i<w.length;i+=chunk) ms+=(60000/this.state.wpm)*chunk*(this.state.adaptive?1.18:1); return ms; }
+
+  tick=()=>{
+    const {idx,words,chunk}=this.state;
+    if(idx>=words.length){ this.finish(); return; }
+    this.timer=setTimeout(()=>{ const next=idx+chunk; if(next>=words.length){ this.setState({idx:words.length},()=>this.finish()); } else this.setState({idx:next}, ()=>{ this.maybeToast(); this.tick(); }); }, this.dwell(idx));
+  };
+  play(){
+    if(!this.state.words.length) return;
+    let idx=this.state.idx; if(idx>=this.state.words.length) idx=0;
+    this._sessionStart=Date.now(); this._startIdx=idx; this._playIdx=idx; this._baseWords=this.state.stats.wordsRead||0; this._lastKm=Math.floor(this._baseWords/1000);
+    this.setState({idx,playing:true,chromeHidden:false}, ()=>{ this.scheduleHide(); if(this.state.audioOn && window.speechSynthesis) this.playAudio(); else this.tick(); });
+  }
+  pause(){ clearTimeout(this.timer); this.cancelAudio(); clearTimeout(this._hideT); this.commitSession(); this.setState({playing:false,chromeHidden:false}); this.persistProgress(); }
+  toggle=()=>{ this.state.playing?this.pause():this.play(); };
+  finish(){ clearTimeout(this.timer); this.cancelAudio(); this.commitSession(true); this.setState({playing:false,chromeHidden:false}); this.persistProgress(); }
+  commitSession(finished){
+    if(!this._sessionStart) return;
+    const dt=Date.now()-this._sessionStart; const wr=Math.max(0,this.state.idx-(this._startIdx||0));
+    const st={...this.state.stats}; st.wordsRead+=wr; st.timeMs+=dt; st.sessions+=1;
+    const today=new Date().toDateString(); let newDay=false;
+    if(st.lastDay!==today){ const y=new Date(Date.now()-864e5).toDateString(); st.streak=(st.lastDay===y?st.streak:0)+1; st.lastDay=today; newDay=true; }
+    if(finished || wr>30){ st.history=[...(st.history||[]),{wpm:this.state.wpm,at:Date.now()}].slice(-24); }
+    this.setState({stats:st}); save('sr_stats',st); this._sessionStart=null;
+    if(finished && wr>5) this.showToast('Finished','You reached the end · nice work');
+    else if(newDay && st.streak>=2) this.showToast(st.streak+'-day streak','Kept the habit alive');
+  }
+  jump(i){ clearTimeout(this.timer); this.cancelAudio(); this.setState({idx:Math.max(0,Math.min(i,this.state.words.length)),playing:false,chromeHidden:false}); this.persistProgress(); }
+  stepFwd=()=>{ clearTimeout(this.timer); this.cancelAudio(); this.setState(s=>({idx:Math.min(s.idx+s.chunk,s.words.length),playing:false,chromeHidden:false})); };
+  stepBack=()=>{ clearTimeout(this.timer); this.cancelAudio(); this.setState(s=>({idx:Math.max(0,s.idx-s.chunk),playing:false,chromeHidden:false})); };
+  restart=()=>{ this.jump(0); };
+  rewindSentence=()=>{
+    clearTimeout(this.timer); this.cancelAudio();
+    const w=this.state.words; let i=this.state.idx; let s=0;
+    for(let k=i-1;k>=1;k--){ if(/[.!?…]["')\]]?$/.test(w[k-1])){ s=k; break; } }
+    if(s>=i-1){ let s2=0; for(let k=s-1;k>=1;k--){ if(/[.!?…]["')\]]?$/.test(w[k-1])){ s2=k; break; } } s=s2; }
+    this.jump(s);
+  };
+  onWpm=(e)=>{ this.setWpm(parseInt(e.target.value,10)); };
+  onWpmNum=(e)=>{ const v=parseInt(e.target.value,10); if(!isNaN(v)) this.setState({wpm:v}); };
+  onWpmBlur=(e)=>{ let v=parseInt(e.target.value,10); if(isNaN(v)) v=300; v=Math.max(100,Math.min(1000,v)); this.setWpm(v); };
+  setWpm(v){ this.setState({wpm:v},()=>{ this.persistSettings(); if(this.state.playing && this.state.audioOn && window.speechSynthesis){ this.cancelAudio(); this.playAudio(); } }); }
+  onScrub=(e)=>{ const r=e.currentTarget.getBoundingClientRect(); const p=Math.max(0,Math.min(1,(e.clientX-r.left)/r.width)); this.jump(Math.round(p*this.state.words.length)); };
+
+  scheduleHide(){ clearTimeout(this._hideT); if(!this.state.focusMode) return; this._hideT=setTimeout(()=>{ if(this.state.playing) this.setState({chromeHidden:true}); },1800); }
+  bumpHide(){ if(this.state.chromeHidden) this.setState({chromeHidden:false}); this.scheduleHide(); }
+  showToast(title,sub){ clearTimeout(this._toastT); this.setState({toast:{title,sub}}); this._toastT=setTimeout(()=>this.setState({toast:null}),2800); }
+  dismissToast=()=>{ clearTimeout(this._toastT); this.setState({toast:null}); };
+  maybeToast(idx){ idx=(idx==null)?this.state.idx:idx; const total=(this._baseWords||0)+Math.max(0,idx-(this._startIdx||idx)); if(this._lastKm==null) this._lastKm=Math.floor((this._baseWords||0)/1000); const m=Math.floor(total/1000); if(m>this._lastKm && m>0){ this._lastKm=m; this.showToast((m*1000).toLocaleString()+' words read','Lifetime milestone — keep going'); } }
+  loadVoices=()=>{ try{ const vs=window.speechSynthesis.getVoices()||[]; if(vs.length) this.setState({voices:vs}); }catch(e){} };
+  chosenVoice(){ try{ const vs=this.state.voices.length?this.state.voices:(window.speechSynthesis.getVoices()||[]); if(!vs.length) return null; if(this.state.voiceURI){ const f=vs.find(v=>v.voiceURI===this.state.voiceURI); if(f) return f; } const en=vs.filter(v=>/^en/i.test(v.lang||'')); return en.find(v=>/(enhanced|premium|neural|natural|siri)/i.test(v.name||''))||en.find(v=>v.localService)||en.find(v=>/(google)/i.test(v.name||''))||en[0]||vs[0]||null; }catch(e){ return null; } }
+  setVoice=(uri)=>{ this.set({voiceURI:uri}); if(this.state.playing && this.state.audioOn && window.speechSynthesis){ this.cancelAudio(); setTimeout(()=>{ this._audioActive=true; this.playAudio(); },40); } };
+  previewVoice=()=>{ const synth=window.speechSynthesis; if(!synth) return; synth.cancel(); const u=new SpeechSynthesisUtterance('The quick brown fox jumps over the lazy dog.'); const v=this.chosenVoice(); if(v) u.voice=v; u.rate=Math.max(0.7,Math.min(1.3,this.state.wpm/220)); synth.speak(u); };
+
+  cancelAudio(){ this._audioActive=false; try{ if(window.speechSynthesis) window.speechSynthesis.cancel(); }catch(e){} }
+  playAudio(){
+    const synth=window.speechSynthesis; if(!synth){ this.tick(); return; }
+    synth.cancel();
+    const w=this.state.words; const chunks=[]; let i=this.state.idx;
+    while(i<w.length){
+      let j=i,cnt=0,offsets=[],parts=[],pos=0;
+      while(j<w.length){ const tk=w[j]; offsets.push(pos); parts.push(tk); pos+=tk.length+1; cnt++; j++; if(/[.!?…]["')\]]?$/.test(tk)&&cnt>=3) break; if(cnt>=28) break; }
+      chunks.push({text:parts.join(' '),start:i,offsets,count:cnt}); i=j;
+    }
+    this._chunks=chunks; this._ci=0; this._audioActive=true; this._rate=Math.max(0.6,Math.min(2.6,this.state.wpm/170));
+    this.speakChunk();
+  }
+  speakChunk(){
+    if(!this._audioActive) return; const synth=window.speechSynthesis;
+    if(this._ci>=this._chunks.length){ this.finish(); return; }
+    const c=this._chunks[this._ci]; const u=new SpeechSynthesisUtterance(c.text); u.rate=this._rate; u.lang='en-US'; const vv=this.chosenVoice(); if(vv) u.voice=vv;
+    u.onboundary=(e)=>{ if(!this._audioActive) return; if(e.name&&e.name!=='word') return; let wi=0; for(let k=0;k<c.offsets.length;k++){ if(c.offsets[k]<=e.charIndex) wi=k; else break; } this.setState({idx:c.start+wi}); this.maybeToast(c.start+wi); };
+    u.onend=()=>{ if(!this._audioActive) return; this._ci++; this.setState({idx:Math.min(c.start+c.count,this.state.words.length)}); this.speakChunk(); };
+    u.onerror=()=>{ if(this._audioActive){ this._ci++; this.speakChunk(); } };
+    synth.speak(u);
+  }
+  toggleAudio=()=>{
+    const on=!this.state.audioOn; this.set({audioOn:on});
+    if(this.state.playing){ clearTimeout(this.timer); this.cancelAudio(); if(on&&window.speechSynthesis){ this._audioActive=true; this.playAudio(); } else this.tick(); }
+    else if(!on) this.cancelAudio();
+  };
+
+  loadWords(text,title,id,startIdx){
+    const {words,breaks}=tokenizeDoc(text); clearTimeout(this.timer); this.cancelAudio();
+    this._startIdx=startIdx||0; this._playIdx=null;
+    this.setState({words,breaks,title:title||'Untitled',currentId:id||null,idx:Math.min(startIdx||0,words.length),playing:false,chromeHidden:false,panel:null,quiz:null,quizState:'idle'});
+  }
+  loadSample=()=>{ this.startNew(SAMPLE,'Sample — how RSVP works'); };
+  startNew(text,title){
+    const {words}=tokenizeDoc(text); if(!words.length) return;
+    const existing=this.state.library.find(x=>x.text===text);
+    if(existing){ const lib=[existing,...this.state.library.filter(x=>x.id!==existing.id)]; this.setState({library:lib}); save('sr_library',lib); this.loadWords(existing.text,existing.title,existing.id,Math.min(existing.idx||0,words.length)); return; }
+    const id=uid(); const entry={id,title:title||'Untitled',text,count:words.length,idx:0,addedAt:Date.now()};
+    const lib=[entry,...this.state.library.filter(x=>x.id!==id)].slice(0,60);
+    this.setState({library:lib}); save('sr_library',lib); this.loadWords(text,entry.title,id,0);
+  }
+  persistProgress(){
+    if(!this.state.currentId) return;
+    const lib=this.state.library.map(x=> x.id===this.state.currentId ? {...x,idx:this.state.idx,count:this.state.words.length,lastAt:Date.now()} : x);
+    this.setState({library:lib}); save('sr_library',lib);
+  }
+
+  openIntake=()=>this.setState({panel:'intake'});
+  openLibrary=()=>this.setState({panel:'library'});
+  openSettings=()=>this.setState({panel:'settings'});
+  openStats=()=>this.setState({panel:'stats'});
+  openCalibrate=()=>this.setState({panel:'calibrate',cal:'idle',calWpm:this.state.wpm});
+  openReadTab=()=>this.setState({panel:null});
+  closePanel=()=>{ if(this.state.cal==='running') clearTimeout(this._calTimer); this.setState({panel:null,cal:'idle'}); };
+  stop=(e)=>{ e.stopPropagation(); };
+  onPaste=(e)=>this.setState({pasteText:e.target.value});
+  onUrl=(e)=>this.setState({urlText:e.target.value});
+  onDraftTitle=(e)=>this.setState({draftTitle:e.target.value});
+  setTab(t){ this.setState({intakeTab:t}); }
+  startReading=()=>{
+    const text=this.state.pasteText;
+    if(!tokenize(text).length){ this.setState({pdfStatus:'Nothing to read yet — add some text first.'}); return; }
+    const title=this.state.draftTitle.trim()||(this.state.intakeTab==='url'&&this.state.urlText? this.state.urlText.replace(/^https?:\/\//,'').slice(0,50):this.deriveTitle(text));
+    this.startNew(text,title);
+    this.setState({pasteText:'',draftTitle:'',urlText:'',pdfStatus:'',urlStatus:''});
+    if(this.state.voiceOn && this._rec){ this._rec.stop(); }
+  };
+  deriveTitle(text){
+    const raw=String(text||''); const lines=raw.split('\n').map(l=>l.trim()).filter(Boolean); const first=lines[0]||'';
+    if(first && first.length<=64 && lines.length>1 && !/[.!?]$/.test(first)) return this.tidyTitle(first);
+    const clean=raw.replace(/\s+/g,' ').trim(); const m=clean.match(/^.{0,80}?[.!?](\s|$)/);
+    return this.tidyTitle(m?m[0]:clean.slice(0,60));
+  }
+  tidyTitle(s){ s=String(s||'').replace(/\s+/g,' ').trim().replace(/^["“”'(]+/,'').replace(/["“”'.,;:\s]+$/,''); if(s.length>50){ let c=s.slice(0,50); const sp=c.lastIndexOf(' '); if(sp>22) c=c.slice(0,sp); s=c.replace(/[,;:\-\s]+$/,'')+'…'; } return s||'Untitled'; }
+  onPdf=async(e)=>{
+    const file=e.target.files&&e.target.files[0]; if(!file) return;
+    if(!window.pdfjsLib){ this.setState({pdfStatus:'PDF engine not loaded — try again in a moment.'}); return; }
+    this.setState({pdfStatus:'Extracting “'+file.name+'”…'});
+    try{
+      const buf=await file.arrayBuffer(); const pdf=await pdfjsLib.getDocument({data:buf}).promise; let out=[];
+      for(let p=1;p<=pdf.numPages;p++){ const page=await pdf.getPage(p); const tc=await page.getTextContent(); out.push(tc.items.map(it=>it.str).join(' ')); this.setState({pdfStatus:'Extracting page '+p+' / '+pdf.numPages+'…'}); }
+      const text=out.join('\n').replace(/\s+/g,' ').trim();
+      this.setState({pasteText:text,draftTitle:this.state.draftTitle||file.name.replace(/\.pdf$/i,''),pdfStatus:tokenize(text).length+' words extracted. Press “Read”.'});
+    }catch(err){ this.setState({pdfStatus:'Could not read that PDF ('+(err.message||err)+').'}); }
+  };
+  fetchUrl=async()=>{
+    const url=this.state.urlText.trim(); if(!url){ this.setState({urlStatus:'Enter a URL first.'}); return; }
+    this.setState({urlStatus:'Fetching…'});
+    try{
+      const res=await fetch(url); const html=await res.text(); const text=this.extractArticle(html);
+      if(tokenize(text).length<20) throw new Error('little readable text found');
+      this.setState({pasteText:text,draftTitle:this.state.draftTitle||url.replace(/^https?:\/\//,'').slice(0,50),urlStatus:tokenize(text).length+' words extracted. Press “Read”.'});
+    }catch(err){ this.setState({urlStatus:'Direct fetch failed (often CORS). Use the bookmarklet below, then paste.'}); }
+  };
+  extractArticle(html){
+    const doc=new DOMParser().parseFromString(html,'text/html');
+    doc.querySelectorAll('script,style,nav,header,footer,aside,form,noscript,iframe,figure').forEach(n=>n.remove());
+    const main=doc.querySelector('article')||doc.querySelector('main')||doc.body;
+    const ps=[...main.querySelectorAll('p,li,h1,h2,h3')].map(n=>n.textContent.trim()).filter(t=>t.length>40);
+    return (ps.length?ps.join('\n\n'):main.textContent).replace(/[ \t]+/g,' ').trim();
+  }
+  preventNav=(e)=>{ e.preventDefault(); };
+  toggleVoice=()=>{
+    const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+    if(!SR){ this.setState({voiceHint:'Voice input needs Chrome/Edge — not available in this browser.'}); return; }
+    if(this.state.voiceOn){ if(this._rec)this._rec.stop(); this.setState({voiceOn:false,voiceHint:'Stopped.'}); return; }
+    const rec=new SR(); this._rec=rec; rec.continuous=true; rec.interimResults=false; rec.lang='en-US';
+    rec.onresult=(ev)=>{ let add=''; for(let i=ev.resultIndex;i<ev.results.length;i++){ if(ev.results[i].isFinal) add+=ev.results[i][0].transcript; } if(add) this.setState(s=>({pasteText:(s.pasteText?s.pasteText+' ':'')+add.trim()})); };
+    rec.onerror=(ev)=>this.setState({voiceHint:'Voice error: '+ev.error,voiceOn:false});
+    rec.onend=()=>{ if(this.state.voiceOn){ try{rec.start();}catch(e){} } };
+    try{ rec.start(); this.setState({voiceOn:true,voiceHint:'Listening… speak now. Tap again to stop.',intakeTab:'paste'}); }catch(e){ this.setState({voiceHint:'Could not start microphone.'}); }
+  };
+
+  onCalWpm=(e)=>this.setState({calWpm:parseInt(e.target.value,10)});
+  runCalibration=()=>{
+    const words=tokenize(CAL_PASSAGE); this.setState({cal:'running'}); let i=0;
+    const step=()=>{ if(i>=words.length){ this.setState({cal:'done'}); return; } const sp=splitPivot(words[i]); this.setState({calPre:sp.pre,calPivot:sp.pivot,calPost:sp.post}); const last=words[i]; let d=60000/this.state.calWpm; if(/[.!?,;:]$/.test(last))d*=1.6; if(last.length>7)d*=1.2; i++; this._calTimer=setTimeout(step,d); };
+    step();
+  };
+  acceptCal=()=>{ this.setWpm(this.state.calWpm); this.setState({panel:null,cal:'idle'}); };
+  resetCal=()=>this.setState({cal:'idle'});
+
+  openQuiz=()=>{ this.setState({panel:'quiz'}); if(!this.state.quiz && this.state.quizState!=='loading') this.genQuiz(); };
+  genQuiz=async()=>{
+    if(!window.claude||!window.claude.complete){ this.setState({quizState:'error',quizErrorMsg:'Quiz generation is only available in the live app environment.'}); return; }
+    const text=this.state.words.join(' ').slice(0,4000);
+    if(tokenize(text).length<40){ this.setState({quizState:'error',quizErrorMsg:'Not enough text to build a quiz.'}); return; }
+    this.setState({quizState:'loading',quizAnswers:{},quizScore:null});
+    try{
+      const prompt='Based ONLY on the passage below, write 4 multiple-choice comprehension questions. Return STRICT JSON: an array of objects {"question":string,"choices":[4 strings],"answer":<index 0-3>}. No prose, no markdown fences.\n\nPASSAGE:\n"""'+text+'"""';
+      const raw=await window.claude.complete(prompt);
+      const m=raw.match(/\[[\s\S]*\]/); const arr=JSON.parse(m?m[0]:raw);
+      const quiz=arr.slice(0,4).map(q=>({question:String(q.question),choices:q.choices.slice(0,4).map(String),answer:Number(q.answer)}));
+      this.setState({quiz,quizState:'ready'});
+    }catch(err){ this.setState({quizState:'error',quizErrorMsg:'Could not build the quiz — '+(err.message||err)}); }
+  };
+  pickAnswer(qi,ci){ if(this.state.quizScore!=null) return; this.setState(s=>({quizAnswers:{...s.quizAnswers,[qi]:ci}})); }
+  submitQuiz=()=>{
+    if(this.state.quizScore!=null){ this.setState({panel:null}); return; }
+    const q=this.state.quiz||[]; if(Object.keys(this.state.quizAnswers).length<q.length) return;
+    let correct=0; q.forEach((qq,i)=>{ if(this.state.quizAnswers[i]===qq.answer) correct++; });
+    const score=Math.round(correct/Math.max(1,q.length)*100);
+    const st={...this.state.stats}; st.comp=[...(st.comp||[]),{wpm:this.state.wpm,score,at:Date.now()}].slice(-20);
+    this.setState({quizScore:score,stats:st}); save('sr_stats',st);
+  };
+
+  quickTheme=()=>{ const order=['dark','light','sepia','hc']; const i=order.indexOf(this.state.theme); this.set({theme:order[(i+1)%order.length]}); };
+  setTheme(t){ this.set({theme:t}); }
+  setFont(f){ this.set({font:f}); }
+  onSize=(e)=>this.set({size:parseInt(e.target.value,10)});
+  onWeight=(e)=>this.set({weight:parseInt(e.target.value,10)});
+  setChunk(c){ this.set({chunk:c}); }
+  setPause(p){ this.set({pauseScale:p}); }
+  setMode(m){ this.set({readMode:m}); }
+  loadStarter=(i)=>{ const x=STARTERS[i]; if(x) this.startNew(x.text,x.title); };
+  renameStart=(id,title)=>this.setState({renameId:id,renameText:title});
+  renameChange=(e)=>this.setState({renameText:e.target.value});
+  renameSave=()=>{ const id=this.state.renameId; if(!id) return; const nt=(this.state.renameText||'').trim(); const lib=this.state.library.map(x=>x.id===id?{...x,title:nt||x.title}:x); this.setState({library:lib,renameId:null,renameText:'',title:(this.state.currentId===id&&nt)?nt:this.state.title}); save('sr_library',lib); };
+  togglePacing=()=>this.set({adaptive:!this.state.adaptive});
+  toggleCtx=()=>this.set({showContext:!this.state.showContext});
+  toggleEase=()=>this.set({easeIn:!this.state.easeIn});
+  toggleFocus=()=>{ const on=!this.state.focusMode; this.set({focusMode:on}); if(!on) this.setState({chromeHidden:false}); };
+
+  renderVals(){
+    const s=this.state; const t=THEMES[s.theme]||THEMES.dark; const ff=(FONTS[s.font]||FONTS.serif).family;
+    const isDark = s.theme==='dark'||s.theme==='hc';
+    const has=s.words.length>0;
+    const cur=has? splitPivot(s.words.slice(s.idx,s.idx+s.chunk).join(' ')) : {pre:'',pivot:'',post:''};
+    const total=s.words.length; const pct=total?Math.min(100,s.idx/total*100):0;
+    const remMs=has?this.estRemaining():0; const remMin=Math.floor(remMs/60000), remSec=Math.round((remMs%60000)/1000);
+
+    let ctxBefore='',ctxWord='',ctxAfter='';
+    if(has && s.showContext){
+      let a=s.idx,b=s.idx; while(a>0 && !/[.!?…]["')\]]?$/.test(s.words[a-1])) a--; while(b<total-1 && !/[.!?…]["')\]]?$/.test(s.words[b])) b++;
+      ctxBefore=s.words.slice(a,s.idx).join(' ')+(s.idx>a?' ':''); ctxWord=s.words.slice(s.idx,s.idx+s.chunk).join(' '); ctxAfter=' '+s.words.slice(s.idx+s.chunk,b+1).join(' ');
+    }
+    let flowWords=[], flowSize=19;
+    if(has){
+      const sw2=Math.max(0,s.idx-55), ew2=Math.min(total,s.idx+55);
+      for(let k=sw2;k<ew2;k++){ const isCur=k>=s.idx&&k<s.idx+s.chunk; const rd=k<s.idx;
+        const style=isCur?`background:${t.accentSoft};color:${t.text};font-weight:700;border-radius:4px;padding:1px 3px`:(rd?`color:${t.sub};opacity:.45`:`color:${t.text};opacity:.92`);
+        flowWords.push({text:s.words[k]+' ', style, mark:isCur?'1':''}); }
+      flowSize=Math.max(15,Math.min(21,Math.round(s.size*0.42)));
+    }
+    const starters=STARTERS.map((x,i)=>({title:x.title, meta:x.meta, onClick:()=>this.loadStarter(i)}));
+    const inprog=s.library.filter(x=>x.count&&(x.idx||0)>0&&(x.idx||0)<x.count).sort((a,b)=>(b.lastAt||b.addedAt||0)-(a.lastAt||a.addedAt||0));
+    const resume=inprog[0];
+
+    const tabStyle=(on)=>`font:600 12px/1 sans-serif;padding:9px 13px;border-radius:9px;cursor:pointer;border:1px solid ${on?t.accent:t.border};color:${on?'#fff':t.text};background:${on?t.accent:'transparent'}`;
+    const pillStyle=(on)=>`font:600 12.5px/1 sans-serif;padding:11px 15px;border-radius:9px;cursor:pointer;border:1px solid ${on?t.accent:t.border};color:${on?'#fff':t.text};background:${on?t.accent:'transparent'}`;
+    const sw=(on)=>`width:44px;height:26px;border-radius:20px;background:${on?t.accent:t.border};position:relative;flex:none;transition:background .15s`;
+    const knob=(on)=>`position:absolute;top:2px;left:${on?'20px':'2px'};width:22px;height:22px;border-radius:50%;background:#fff;transition:left .15s`;
+
+    const libraryView=s.library.map(it=>{
+      const p=it.count?Math.round((it.idx||0)/it.count*100):0;
+      return {title:it.title, meta:(it.count||0)+' words · '+p+'% read', pctW:p+'%', cta:p>0&&p<100?'Resume':(p>=100?'Reread':'Read'), editing:s.renameId===it.id, notEditing:s.renameId!==it.id, rename:()=>this.renameStart(it.id,it.title),
+        open:()=>{ this.loadWords(it.text,it.title,it.id,Math.min(it.idx||0,tokenizeDoc(it.text).words.length)); },
+        remove:()=>{ const lib=s.library.filter(x=>x.id!==it.id); this.setState({library:lib,currentId:s.currentId===it.id?null:s.currentId}); save('sr_library',lib); } };
+    });
+    const themeOpts=Object.keys(THEMES).map(k=>({label:THEME_LABELS[k],style:pillStyle(s.theme===k),onClick:()=>this.setTheme(k)}));
+    const fontOpts=Object.keys(FONTS).map(k=>({label:FONTS[k].label,style:`font:600 13px/1 ${FONTS[k].family};padding:11px 15px;border-radius:9px;cursor:pointer;border:1px solid ${s.font===k?t.accent:t.border};color:${s.font===k?'#fff':t.text};background:${s.font===k?t.accent:'transparent'}`,onClick:()=>this.setFont(k)}));
+    const chunkOpts=[1,2,3].map(c=>({label:c+(c===1?' word':' words'),style:pillStyle(s.chunk===c),onClick:()=>this.setChunk(c)}));
+    const pauseOpts=[['subtle','Subtle'],['natural','Natural'],['long','Long']].map(([k,l])=>({label:l,style:pillStyle(s.pauseScale===k),onClick:()=>this.setPause(k)}));
+    const modeOpts=[['flash','Flash — one word'],['flow','Flow — guided highlight']].map(([k,l])=>({label:l,style:pillStyle(s.readMode===k),onClick:()=>this.setMode(k)}));
+    const enVoices=(s.voices||[]).filter(v=>/^en/i.test(v.lang||''));
+    const voiceOpts=[{label:'Auto — best',uri:'',active:!s.voiceURI}].concat(enVoices.map(v=>({label:(v.name||'Voice').replace(/\s*\(.*\)/,'').trim()+(/(enhanced|premium|neural|natural)/i.test(v.name||'')?' ✦':''),uri:v.voiceURI,active:s.voiceURI===v.voiceURI}))).map(o=>({label:o.label,style:pillStyle(o.active),onClick:()=>this.setVoice(o.uri)}));
+    const intakeTabs=[['paste','Paste'],['pdf','PDF'],['url','Web']].map(([k,l])=>({label:l,style:tabStyle(s.intakeTab===k),onClick:()=>this.setTab(k)}));
+
+    const st=s.stats||{}; const mins=Math.round((st.timeMs||0)/60000);
+    const statCards=[{value:(st.wordsRead||0).toLocaleString(),label:'Words read'},{value:mins+'m',label:'Time reading'},{value:(st.sessions||0),label:'Sessions'},{value:(st.streak||0),label:'Day streak'}];
+    const hist=st.history||[]; const maxW=Math.max(300,...hist.map(h=>h.wpm)); const wpmBars=hist.map(h=>({h:Math.round(h.wpm/maxW*88)+'%',title:h.wpm+' WPM'}));
+    const comp=(st.comp||[]).slice().reverse(); const compRows=comp.map(c=>({wpm:c.wpm,score:c.score,w:c.score+'%',color:c.score>=70?t.accent:(c.score>=40?'#d9a441':t.sub)}));
+
+    const graded=s.quizScore!=null;
+    const quizView=(s.quiz||[]).map((q,qi)=>({n:qi+1,question:q.question,choices:q.choices.map((c,ci)=>{
+      const sel=s.quizAnswers[qi]===ci; const correct=graded&&ci===q.answer; const wrong=graded&&sel&&ci!==q.answer;
+      const bg=correct?'rgba(60,170,90,.22)':wrong?'rgba(220,60,60,.2)':sel?t.accentSoft:'transparent';
+      const bd=correct?'#3caa5a':wrong?'#d84a4a':sel?t.accent:t.border;
+      return {text:c,onClick:()=>this.pickAnswer(qi,ci),style:`text-align:left;font:500 13.5px/1.4 sans-serif;padding:12px 14px;border-radius:11px;cursor:pointer;border:1px solid ${bd};background:${bg};color:${t.text}`};
+    })}));
+    const allAnswered=(s.quiz||[]).length>0 && Object.keys(s.quizAnswers).length>=(s.quiz||[]).length;
+    const hidden=s.chromeHidden;
+    const tabc=(active)=> active? t.accent : t.sub;
+
+    return {
+      t, isDark, fontFamily:ff, size:s.size, weight:s.weight, wpm:s.wpm,
+      hasText:has, noText:!has, pre:cur.pre, pivotCh:cur.pivot, post:cur.post, bandH:Math.round(s.size*2.0),
+      showContext:s.showContext&&has&&s.readMode!=='flow', ctxBefore, ctxWord, ctxAfter,
+      headerTitle:s.title||'Nothing loaded', themeGlyph:isDark?'☀':'☾',
+      playGlyph:s.playing?'❚❚':'▶',
+      holdStart:this.holdStart, holdEnd:this.holdEnd,
+      modeLabel:s.readMode==='flow'?'Flow':(s.audioOn?'Listen':'Focus'), showHoldHint:has && !s.playing && !s.panel && !hidden, flashMode:s.readMode!=='flow', flowMode:s.readMode==='flow', flowWords, flowSize, readerH:224, innerRef:this.innerRef,
+      paraOpacity:(s.readMode==='flow')?'1':(s.playing?'0':'1'), wordOverlayOpacity:(s.readMode!=='flow'&&s.playing)?'1':'0',
+      posLabel:has?(Math.min(s.idx+1,total))+'/'+total:'–',
+      remainLabel:has?(remMin>0?remMin+'m':'')+remSec+'s':'', pctW:pct+'%', wpmLabel:s.wpm,
+      chromeOp:hidden?'0':'1', chromePe:hidden?'none':'auto',
+      toastShow:!!s.toast, toastTitle:s.toast?s.toast.title:'', toastSub:s.toast?s.toast.sub:'', dismissToast:this.dismissToast,
+      audioLabel:s.audioOn?'Audio ●':'Audio',
+      audioBtnStyle:`font:600 11px/1 sans-serif;padding:9px 11px;border-radius:10px;cursor:pointer;border:1px solid ${s.audioOn?t.accent:t.border};background:${s.audioOn?t.accent:'transparent'};color:${s.audioOn?'#fff':t.sub};white-space:nowrap;flex:none`,
+      toggleAudio:this.toggleAudio,
+      toggle:this.toggle, stepFwd:this.stepFwd, stepBack:this.stepBack, restart:this.restart, rewindSentence:this.rewindSentence,
+      onWpm:this.onWpm, onWpmNum:this.onWpmNum, onWpmBlur:this.onWpmBlur, onScrub:this.onScrub, quickTheme:this.quickTheme,
+      openIntake:this.openIntake, openLibrary:this.openLibrary, openSettings:this.openSettings, openStats:this.openStats, openCalibrate:this.openCalibrate, openReadTab:this.openReadTab, loadSample:this.loadSample,
+      starters, loadStarter:this.loadStarter, resumeShow:!!resume, resumeTitle:resume?resume.title:'', resumePct:resume?Math.round((resume.idx/resume.count)*100):0, resumeOpen:resume?()=>this.loadWords(resume.text,resume.title,resume.id,Math.min(resume.idx,tokenizeDoc(resume.text).words.length)):this.openIntake,
+      closePanel:this.closePanel, stop:this.stop,
+      tabRead:tabc(!s.panel), tabLib:tabc(s.panel==='library'), tabStats:tabc(s.panel==='stats'), tabSet:tabc(s.panel==='settings'||s.panel==='calibrate'),
+      anyPanel:!!s.panel,
+      panelTitle:{intake:'Add to read',library:'Library',settings:'Settings',stats:'Your reading',calibrate:'Calibrate speed',quiz:'Comprehension'}[s.panel]||'',
+      isIntake:s.panel==='intake', isLibrary:s.panel==='library', isSettings:s.panel==='settings', isStats:s.panel==='stats', isCalibrate:s.panel==='calibrate', isQuiz:s.panel==='quiz',
+      intakeTabs, tabPaste:s.intakeTab==='paste', tabPdf:s.intakeTab==='pdf', tabUrl:s.intakeTab==='url',
+      pasteText:s.pasteText, onPaste:this.onPaste, pasteWordCount:tokenize(s.pasteText).length,
+      urlText:s.urlText, onUrl:this.onUrl, fetchUrl:this.fetchUrl, urlStatus:s.urlStatus, pdfStatus:s.pdfStatus, onPdf:this.onPdf,
+      draftTitle:s.draftTitle, onDraftTitle:this.onDraftTitle, startReading:this.startReading,
+      voiceLabel:s.voiceOn?'Stop ●':'Dictate', voiceHint:s.voiceHint, toggleVoice:this.toggleVoice,
+      voiceBtnStyle:`font:600 12.5px/1 sans-serif;padding:11px 15px;border-radius:9px;cursor:pointer;border:1px solid ${s.voiceOn?t.accent:t.border};background:${s.voiceOn?t.accent:'transparent'};color:${s.voiceOn?'#fff':t.text};flex:none`,
+      bookmarklet:this.buildBookmarklet(), preventNav:this.preventNav,
+      libraryView, libEmpty:s.library.length===0, renameText:s.renameText, renameChange:this.renameChange, renameSave:this.renameSave,
+      themeOpts, fontOpts, chunkOpts, pauseOpts, modeOpts, voiceOpts, hasVoices:enVoices.length>0, previewVoice:this.previewVoice, onSize:this.onSize, onWeight:this.onWeight,
+      togglePacing:this.togglePacing, toggleCtx:this.toggleCtx, toggleEase:this.toggleEase, toggleFocus:this.toggleFocus,
+      pacingSw:sw(s.adaptive), pacingKnob:knob(s.adaptive), ctxSw:sw(s.showContext), ctxKnob:knob(s.showContext),
+      easeSw:sw(s.easeIn), easeKnob:knob(s.easeIn), focusSw:sw(s.focusMode), focusKnob:knob(s.focusMode), swStatus:s.swStatus,
+      calIdle:s.cal==='idle', calRunning:s.cal==='running', calDone:s.cal==='done', calWpm:s.calWpm, onCalWpm:this.onCalWpm, runCalibration:this.runCalibration, acceptCal:this.acceptCal, resetCal:this.resetCal, calPre:s.calPre, calPivot:s.calPivot, calPost:s.calPost,
+      statCards, wpmBars, noHistory:hist.length===0, compRows, noQuizzes:comp.length===0,
+      showQuizFab:has && !s.panel && !hidden && s.idx>=Math.max(8,total*0.5),
+      openQuiz:this.openQuiz, quizLoading:s.quizState==='loading', quizError:s.quizState==='error', quizReady:s.quizState==='ready', quizErrorMsg:s.quizErrorMsg,
+      quizView, quizGraded:graded, quizScore:s.quizScore, quizVerdict:graded?(s.quizScore>=70?'strong — push faster':s.quizScore>=40?'okay — hold here':'try slowing down'):'',
+      submitQuiz:this.submitQuiz, quizSubmitLabel:graded?'Done':'Submit answers',
+      quizSubmitStyle:`font:600 14px/1 sans-serif;padding:15px;border-radius:12px;cursor:${allAnswered||graded?'pointer':'not-allowed'};border:none;background:${allAnswered||graded?t.accent:t.border};color:${allAnswered||graded?'#fff':t.sub}`
+    };
+  }
+  buildBookmarklet(){
+    const code="(function(){function g(s){return Array.from(document.querySelectorAll(s))}var m=document.querySelector('article')||document.querySelector('main')||document.body;var ps=g('p,li,h1,h2,h3').filter(function(n){return n.innerText.trim().length>40}).map(function(n){return n.innerText.trim()});var t=(ps.length?ps.join('\\n\\n'):m.innerText).replace(/[ \\t]+/g,' ').trim();navigator.clipboard.writeText(t).then(function(){alert('Copied '+t.split(/\\s+/).length+' words. Paste into Flashread.')},function(){prompt('Copy this text:',t)})})();";
+    return 'javascript:'+encodeURIComponent(code);
+  }
+}
+</script>
+</body>
+</html>
