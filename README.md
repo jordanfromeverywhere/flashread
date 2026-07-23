@@ -1,25 +1,67 @@
-# CODING AGENTS: READ THIS FIRST
+# Flashread
 
-This is a **handoff bundle** from Claude Design (claude.ai/design).
+An RSVP (rapid serial visual presentation) speed-reader for the web. Words flash
+one at a time at a fixed point, each aligned on its optimal recognition point (the
+pivot letter, in red), so your eyes never travel across a line — no saccades, no
+backtracking. Built as a full-screen, installable mobile web app.
 
-A user mocked up designs in HTML/CSS/JS using an AI design tool, then exported this bundle so a coding agent can implement the designs for real.
+This is a real React implementation of a design that was prototyped in
+[Claude Design](https://claude.ai/design). The original prototype and the design
+conversation are preserved under [`project/`](project/) and [`chats/`](chats/).
 
-## What you should do — IMPORTANT
+## Features
 
-**Read the chat transcripts first.** There are 1 chat transcript(s) in `chats/`. The transcripts show the full back-and-forth between the user and the design assistant — they tell you **what the user actually wants** and **where they landed** after iterating. Don't skip them. The final HTML files are the output, but the chat is where the intent lives.
+- **Reading engine** — ORP pivot alignment that scales with word length; adaptive,
+  research-tuned dwell timing (syllable-weighted, punctuation- and paragraph-aware,
+  short-word speed-up) with an optional ease-in ramp so each session starts gentle.
+- **Two reading modes** — **Flash** (single word, with the surrounding paragraph
+  visible at rest and a fade-to-single-word transition while reading) and **Flow**
+  (Outread-style guided highlight that keeps context and parafoveal preview).
+- **Press-and-hold to read** — hold the reading area (or hold <kbd>Space</kbd>) to
+  play; release to pause. Focus mode fades the chrome while playing.
+- **Synced narration** — optional text-to-speech that highlights in time with the
+  spoken word, with an on-device voice picker.
+- **Text intake** — paste, in-browser PDF extraction (pdf.js), webpage fetch by URL
+  with a bookmarklet fallback, and optional voice dictation. Smart auto-titles and
+  rename. A built-in starter library to get going.
+- **Library & resume** — everything you read is saved locally with your exact word
+  position; a Continue card drops you back where you stopped. Each entry tracks
+  percent read.
+- **Playback control** — play/pause, restart, step one word either way, rewind by
+  sentence, scrub, and live WPM adjustment (type it or drag, 100–1000).
+- **Speed calibration** — a fixed passage runs at a chosen pace so you can find the
+  speed you actually sustain.
+- **Stats** — words read, time, sessions, day streak, and a recent-WPM chart.
+- **Milestone toasts** — lifetime word-count and streak notifications.
+- **Themes** — Dark (default), Light, Sepia and OLED; warm and easy on the eyes with
+  a red accent. Typeface (incl. a dyslexia-friendly option), size and weight controls.
+- **Offline** — a service worker caches the app shell for offline reading.
 
-**Read `project/SpeedReader.dc.html` in full.** The user had this file open when they triggered the handoff, so it's almost certainly the primary design they want built. Read it top to bottom — don't skim. Then **follow its imports**: open every file it pulls in (shared components, CSS, scripts) so you understand how the pieces fit together before you start implementing.
+All data stays in your browser (`localStorage`); nothing is uploaded.
 
-**If anything is ambiguous, ask the user to confirm before you start implementing.** It's much cheaper to clarify scope up front than to build the wrong thing.
+## Getting started
 
-## About the design files
+```bash
+npm install
+npm run dev      # start the dev server
+npm run build    # type-check + production build to dist/
+npm run preview  # serve the production build
+```
 
-The design medium is **HTML/CSS/JS** — these are prototypes, not production code. Your job is to **recreate them pixel-perfectly** in whatever technology makes sense for the target codebase (React, Vue, native, whatever fits). Match the visual output; don't copy the prototype's internal structure unless it happens to fit.
+Requires Node 18+.
 
-**Don't render these files in a browser or take screenshots unless the user asks you to.** Everything you need — dimensions, colors, layout rules — is spelled out in the source. Read the HTML and CSS directly; a screenshot won't tell you anything they don't.
+## Tech
 
-## Bundle contents
+React 18 + TypeScript + Vite. The reading engine lives in
+[`src/lib/engine.ts`](src/lib/engine.ts) (pure functions) and
+[`src/useSpeedReader.ts`](src/useSpeedReader.ts) (the stateful hook driving playback,
+audio and intake). Presentational pieces are under [`src/components/`](src/components/).
 
-- `README.md` — this file
-- `chats/` — conversation transcripts (read these!)
-- `project/` — the `Speed-reading with visual presentation` project files (HTML prototypes, assets, components)
+## Notes on the port
+
+- **No device frame.** The prototype was shown inside a simulated iPhone; the real
+  app fills the viewport (constrained to a phone-width column on large screens) and
+  respects `env(safe-area-inset-*)`.
+- **No AI quiz.** The prototype's comprehension quiz was generated by an in-app model
+  (`window.claude.complete`) that doesn't exist standalone, so it was omitted. The
+  rest of the feature set — including the stats surfaces it fed — is intact.
