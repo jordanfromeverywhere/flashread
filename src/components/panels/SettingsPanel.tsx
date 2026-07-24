@@ -1,4 +1,5 @@
 import type { CSSProperties } from 'react'
+import { useEffect, useRef } from 'react'
 import type { Derived } from '../../derive'
 import type { ReaderActions, ReaderState } from '../../useSpeedReader'
 import { FONTS, THEME_LABELS, THEME_ORDER } from '../../lib/theme'
@@ -52,15 +53,34 @@ function Toggle({
 export function SettingsPanel({ s, d, a }: { s: ReaderState; d: Derived; a: ReaderActions }) {
   const { t } = d
   const enVoices = curateVoices(s.voices || []).slice(0, 6)
-  const voiceOpts = [{ label: 'Auto — best', uri: '', active: !s.voiceURI }].concat(
-    enVoices.map((v) => ({
-      label:
-        (v.name || 'Voice').replace(/\s*\(.*\)/, '').trim() +
-        (/(enhanced|premium|neural|natural)/i.test(v.name || '') ? ' ✦' : ''),
-      uri: v.voiceURI,
-      active: s.voiceURI === v.voiceURI,
-    })),
-  )
+  // No "Auto" option — the list defaults to the first (best-ranked) voice.
+  const voiceOpts = enVoices.map((v, i) => ({
+    label:
+      (v.name || 'Voice').replace(/\s*\(.*\)/, '').trim() +
+      (/(enhanced|premium|neural|natural)/i.test(v.name || '') ? ' ✦' : ''),
+    uri: v.voiceURI,
+    active: s.voiceURI ? s.voiceURI === v.voiceURI : i === 0,
+  }))
+
+  // When opened via the "get a better voice" hint, scroll to the voice section.
+  // Retried across the sheet's slide-up (~0.28s) so it reliably lands, then the
+  // flag is cleared. Instant scroll — smooth fights the entrance animation.
+  const voiceRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (s.settingsScroll !== 'voice') return
+    let id = 0
+    let tries = 0
+    const tick = () => {
+      voiceRef.current?.scrollIntoView({ block: 'start' })
+      tries += 1
+      if (tries < 6) id = window.setTimeout(tick, 90)
+      else a.setState({ settingsScroll: null })
+    }
+    id = window.setTimeout(tick, 60)
+    return () => clearTimeout(id)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [s.settingsScroll])
+
   const label = { ...sectionLabel, color: t.sub }
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 22 }}>
@@ -137,7 +157,7 @@ export function SettingsPanel({ s, d, a }: { s: ReaderState; d: Derived; a: Read
       </div>
 
       {enVoices.length > 0 && (
-        <div>
+        <div ref={voiceRef} style={{ scrollMarginTop: 8 }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 11 }}>
             <div style={{ ...sectionLabel, marginBottom: 0, color: t.sub }}>Narration voice</div>
             <button
@@ -162,9 +182,11 @@ export function SettingsPanel({ s, d, a }: { s: ReaderState; d: Derived; a: Read
               </button>
             ))}
           </div>
-          <div style={{ font: '400 11px/1.4 sans-serif', color: t.sub, marginTop: 8 }}>
-            Uses the best voice your device provides, generated on-device as you read. Voices marked ✦ are the
-            highest quality.
+          <div style={{ font: '400 11px/1.5 sans-serif', color: t.sub, marginTop: 8 }}>
+            Voices come from your device, generated on-device as you read — nothing is uploaded. For much more
+            natural audio on iPhone/iPad, download an “Enhanced” or Siri voice in{' '}
+            <span style={{ color: t.text }}>Settings → Accessibility → Spoken Content → Voices</span>; Flashread
+            picks it automatically. Voices marked ✦ are the highest quality.
           </div>
         </div>
       )}

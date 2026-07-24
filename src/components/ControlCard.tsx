@@ -2,6 +2,7 @@ import type { CSSProperties } from 'react'
 import { useState } from 'react'
 import type { Derived } from '../derive'
 import type { ReaderActions, ReaderState } from '../useSpeedReader'
+import { hasQualityVoice } from '../lib/voices'
 
 const WORDS_PER_PAGE = 250
 
@@ -178,6 +179,32 @@ export function ControlCard({ s, d, a }: { s: ReaderState; d: Derived; a: Reader
           {s.audioOn ? 'Audio ●' : 'Audio'}
         </button>
       </div>
+
+      {s.audioOn && (s.voices?.length || 0) > 0 && !hasQualityVoice(s.voices) && (
+        <button
+          onClick={a.openVoiceSettings}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 7,
+            marginTop: 10,
+            width: '100%',
+            textAlign: 'left',
+            background: 'transparent',
+            border: 'none',
+            padding: '2px 0',
+            cursor: 'pointer',
+            font: '500 11.5px/1.35 sans-serif',
+            color: t.sub,
+          }}
+        >
+          <span aria-hidden style={{ color: t.accent, fontSize: 13, flex: 'none' }}>♪</span>
+          <span>
+            Robotic voice? Your device only has basic ones —{' '}
+            <span style={{ color: t.accent }}>get a better one&nbsp;→</span>
+          </span>
+        </button>
+      )}
     </div>
   )
 }

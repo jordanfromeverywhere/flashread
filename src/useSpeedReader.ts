@@ -35,6 +35,7 @@ export interface ReaderState extends Settings {
   renameId: string | null
   renameText: string
   panel: PanelKey
+  settingsScroll: string | null
   intakeTab: IntakeTab
   pasteText: string
   urlText: string
@@ -90,6 +91,7 @@ function initialState(): ReaderState {
     renameId: null,
     renameText: '',
     panel: null,
+    settingsScroll: null,
     intakeTab: 'paste',
     pasteText: '',
     urlText: '',
@@ -838,6 +840,10 @@ export function useSpeedReader() {
   )
   const openReadTab = useCallback(() => setState({ panel: null }), [setState])
   const openMore = useCallback(() => setState({ panel: 'more' }), [setState])
+  const openVoiceSettings = useCallback(
+    () => setState({ panel: 'settings', settingsScroll: 'voice' }),
+    [setState],
+  )
   const closePanel = useCallback(() => {
     if (stateRef.current.cal === 'running') clearTimeout(r.calTimer)
     setState({ panel: null, cal: 'idle' })
@@ -1028,6 +1034,7 @@ export function useSpeedReader() {
       openCalibrate,
       openReadTab,
       openMore,
+      openVoiceSettings,
       closePanel,
       quickTheme,
       toggleFocus,

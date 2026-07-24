@@ -34,6 +34,13 @@ function rank(v: SpeechSynthesisVoice): number {
   return s
 }
 
+// True when the device exposes at least one genuinely high-quality voice
+// (Siri / enhanced / premium / neural / natural). If false, the user is stuck
+// with basic compact voices and we nudge them to download a better one.
+export function hasQualityVoice(voices: SpeechSynthesisVoice[]): boolean {
+  return voices.filter(isEnglish).some((v) => QUALITY.test(v.name || ''))
+}
+
 // English voices, novelty ones removed, de-duplicated by display name, best first.
 export function curateVoices(voices: SpeechSynthesisVoice[]): SpeechSynthesisVoice[] {
   const seen = new Set<string>()
