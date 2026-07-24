@@ -13,6 +13,7 @@ import type { FontKey, ThemeKey } from './lib/theme'
 import { THEME_ORDER } from './lib/theme'
 import { deriveTitle, fetchArticle } from './lib/intake'
 import { CAL_PASSAGE, SAMPLE, STARTERS } from './lib/content'
+import { audioRate, pickVoice } from './lib/voices'
 
 export type PanelKey = 'intake' | 'library' | 'settings' | 'stats' | 'calibrate' | 'more' | null
 export type IntakeTab = 'paste' | 'pdf' | 'url'
@@ -272,19 +273,7 @@ export function useSpeedReader() {
       const s = stateRef.current
       const vs = s.voices.length ? s.voices : window.speechSynthesis.getVoices() || []
       if (!vs.length) return null
-      if (s.voiceURI) {
-        const f = vs.find((v) => v.voiceURI === s.voiceURI)
-        if (f) return f
-      }
-      const en = vs.filter((v) => /^en/i.test(v.lang || ''))
-      return (
-        en.find((v) => /(enhanced|premium|neural|natural|siri)/i.test(v.name || '')) ||
-        en.find((v) => v.localService) ||
-        en.find((v) => /(google)/i.test(v.name || '')) ||
-        en[0] ||
-        vs[0] ||
-        null
-      )
+      return pickVoice(vs, s.voiceURI)
     } catch {
       return null
     }
@@ -431,7 +420,7 @@ export function useSpeedReader() {
     r.chunks = chunks
     r.ci = 0
     r.audioActive = true
-    r.rate = Math.max(0.6, Math.min(2.6, stateRef.current.wpm / 170))
+    r.rate = audioRate(stateRef.current.wpm)
     speakChunk.current()
   }
 
@@ -821,7 +810,7 @@ export function useSpeedReader() {
     const u = new SpeechSynthesisUtterance('The quick brown fox jumps over the lazy dog.')
     const v = chosenVoice()
     if (v) u.voice = v
-    u.rate = Math.max(0.7, Math.min(1.3, stateRef.current.wpm / 220))
+    u.rate = audioRate(stateRef.current.wpm)
     synth.speak(u)
   }, [chosenVoice])
 

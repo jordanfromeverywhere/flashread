@@ -1,9 +1,27 @@
 import type { CSSProperties } from 'react'
+import { useState } from 'react'
 import type { Derived } from '../derive'
 import type { ReaderActions, ReaderState } from '../useSpeedReader'
 
+const WORDS_PER_PAGE = 250
+
 export function ControlCard({ s, d, a }: { s: ReaderState; d: Derived; a: ReaderActions }) {
   const { t } = d
+
+  // Bottom-left figure cycles through three views on tap.
+  const [posMode, setPosMode] = useState(0)
+  const total = s.words.length
+  const idx = Math.min(s.idx, total)
+  const pctDone = total ? Math.round((idx / total) * 100) : 0
+  const pagesTotal = Math.max(1, Math.ceil(total / WORDS_PER_PAGE))
+  const pagesRead = total ? Math.min(pagesTotal, Math.floor(idx / WORDS_PER_PAGE) + 1) : 0
+  const posText =
+    posMode === 1
+      ? `${100 - pctDone}% left`
+      : posMode === 2
+        ? `pg ${pagesRead}/${pagesTotal}`
+        : `${pctDone}% done`
+
   const iconBtn: CSSProperties = {
     width: 48,
     height: 48,
@@ -30,16 +48,27 @@ export function ControlCard({ s, d, a }: { s: ReaderState; d: Derived; a: Reader
       }}
     >
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
-        <div
+        <button
+          onClick={() => setPosMode((m) => (m + 1) % 3)}
+          title="Tap to switch: % done · % left · pages"
+          aria-label={`Progress: ${posText}. Tap to change.`}
           style={{
             font: '500 10.5px/1 ui-monospace,Menlo,monospace',
             color: t.sub,
-            width: 46,
-            textAlign: 'right',
+            width: 74,
+            textAlign: 'left',
+            whiteSpace: 'nowrap',
+            background: 'transparent',
+            border: 'none',
+            padding: 0,
+            cursor: 'pointer',
+            textDecoration: 'underline dotted',
+            textUnderlineOffset: 3,
+            textDecorationColor: t.border,
           }}
         >
-          {d.posLabel}
-        </div>
+          {posText}
+        </button>
         <div
           onClick={a.onScrub}
           style={{ flex: 1, height: 6, borderRadius: 4, background: t.border, position: 'relative', cursor: 'pointer' }}

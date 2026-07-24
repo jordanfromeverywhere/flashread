@@ -32,7 +32,6 @@ export interface Derived {
   headerTitle: string
   themeGlyph: string
   playGlyph: string
-  posLabel: string
   remainLabel: string
   pctW: string
   // chrome
@@ -47,6 +46,17 @@ export interface Derived {
   resumePct: number
 }
 
+// Remaining time as "1h 19m" for long reads, "3m 20s" for short, "12s" for tiny.
+function fmtRemain(remMs: number): string {
+  const totalMin = Math.floor(remMs / 60000)
+  const h = Math.floor(totalMin / 60)
+  const m = totalMin % 60
+  const sec = Math.round((remMs % 60000) / 1000)
+  if (h > 0) return `${h}h ${m}m`
+  if (totalMin > 0) return `${totalMin}m ${sec}s`
+  return `${sec}s`
+}
+
 export function derive(s: ReaderState): Derived {
   const t = THEMES[s.theme] || THEMES.dark
   const ff = (FONTS[s.font] || FONTS.serif).family
@@ -58,8 +68,6 @@ export function derive(s: ReaderState): Derived {
   const total = s.words.length
   const pct = total ? Math.min(100, (s.idx / total) * 100) : 0
   const remMs = has ? estRemaining(s.words, s.idx, s.wpm, s.chunk, s.adaptive) : 0
-  const remMin = Math.floor(remMs / 60000)
-  const remSec = Math.round((remMs % 60000) / 1000)
 
   const flowWords: FlowWord[] = []
   let flowSize = 19
@@ -107,8 +115,7 @@ export function derive(s: ReaderState): Derived {
     headerTitle: s.title || 'Nothing loaded',
     themeGlyph: isDark ? '☀' : '☾',
     playGlyph: s.playing ? '❚❚' : '▶',
-    posLabel: has ? `${Math.min(s.idx + 1, total)}/${total}` : '–',
-    remainLabel: has ? `${remMin > 0 ? remMin + 'm' : ''}${remSec}s` : '',
+    remainLabel: has ? fmtRemain(remMs) : '',
     pctW: pct + '%',
     chromeOp: s.chromeHidden ? '0' : '1',
     chromePe: s.chromeHidden ? 'none' : 'auto',

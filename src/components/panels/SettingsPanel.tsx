@@ -3,6 +3,7 @@ import type { Derived } from '../../derive'
 import type { ReaderActions, ReaderState } from '../../useSpeedReader'
 import { FONTS, THEME_LABELS, THEME_ORDER } from '../../lib/theme'
 import type { FontKey } from '../../lib/theme'
+import { curateVoices } from '../../lib/voices'
 import { fontPillStyle, pillStyle, switchKnob, switchTrack } from '../ui'
 
 const sectionLabel: CSSProperties = {
@@ -50,7 +51,7 @@ function Toggle({
 
 export function SettingsPanel({ s, d, a }: { s: ReaderState; d: Derived; a: ReaderActions }) {
   const { t } = d
-  const enVoices = (s.voices || []).filter((v) => /^en/i.test(v.lang || ''))
+  const enVoices = curateVoices(s.voices || []).slice(0, 6)
   const voiceOpts = [{ label: 'Auto — best', uri: '', active: !s.voiceURI }].concat(
     enVoices.map((v) => ({
       label:
