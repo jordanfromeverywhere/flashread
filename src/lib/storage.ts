@@ -58,6 +58,8 @@ export interface Settings {
   audioOn: boolean
   readMode: 'flash' | 'flow'
   voiceURI: string
+  neuralOn: boolean
+  neuralVoice: string
 }
 
 export const STORAGE_KEYS = {

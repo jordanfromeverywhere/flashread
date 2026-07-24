@@ -5,6 +5,7 @@ import type { ReaderActions, ReaderState } from '../../useSpeedReader'
 import { FONTS, THEME_LABELS, THEME_ORDER } from '../../lib/theme'
 import type { FontKey } from '../../lib/theme'
 import { curateVoices } from '../../lib/voices'
+import { KOKORO_VOICES } from '../../lib/neuralTts'
 import { fontPillStyle, pillStyle, switchKnob, switchTrack } from '../ui'
 
 const sectionLabel: CSSProperties = {
@@ -190,6 +191,32 @@ export function SettingsPanel({ s, d, a }: { s: ReaderState; d: Derived; a: Read
           </div>
         </div>
       )}
+
+      <div>
+        <div style={label}>On-device voice · beta</div>
+        <Toggle
+          t={t}
+          on={s.neuralOn}
+          onClick={a.toggleNeural}
+          title="Neural voice (on-device)"
+          desc="A far more natural voice that runs entirely on your device. First use downloads ~80 MB once; turn on Audio in the reader to hear it."
+        />
+        {s.neuralOn && (
+          <div style={{ marginTop: 12 }}>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              {KOKORO_VOICES.map((v) => (
+                <button key={v.id} onClick={() => a.setNeuralVoice(v.id)} style={pillStyle(t, s.neuralVoice === v.id)}>
+                  {v.label}
+                </button>
+              ))}
+            </div>
+            <div style={{ font: '400 11px/1.5 sans-serif', color: t.sub, marginTop: 8 }}>
+              Generated locally — nothing is uploaded, and it works offline after the first download. On phones the
+              first sentence can take a moment to generate; it needs a modern browser (WebGPU preferred).
+            </div>
+          </div>
+        )}
+      </div>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
         <Toggle

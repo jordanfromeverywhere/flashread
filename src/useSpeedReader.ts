@@ -14,6 +14,7 @@ import { THEME_ORDER } from './lib/theme'
 import { deriveTitle, fetchArticle } from './lib/intake'
 import { CAL_PASSAGE, SAMPLE, STARTERS } from './lib/content'
 import { audioRate, pickVoice } from './lib/voices'
+import { hasWebGPU, loadKokoro, neuralSpeed, neuralSynth } from './lib/neuralTts'
 
 export type PanelKey = 'intake' | 'library' | 'settings' | 'stats' | 'calibrate' | 'more' | null
 export type IntakeTab = 'paste' | 'pdf' | 'url'
@@ -54,6 +55,7 @@ export interface ReaderState extends Settings {
   voices: SpeechSynthesisVoice[]
   toast: Toast | null
   swStatus: string
+  neuralStatus: string
 }
 
 const DEFAULT_STATS: Stats = {
@@ -81,6 +83,9 @@ function initialState(): ReaderState {
     audioOn: !!s.audioOn,
     readMode: s.readMode || 'flash',
     voiceURI: s.voiceURI || '',
+    neuralOn: !!s.neuralOn,
+    neuralVoice: s.neuralVoice || 'af_heart',
+    neuralStatus: '',
     words: [],
     breaks: [],
     idx: 0,
@@ -139,6 +144,11 @@ interface Refs {
   ci: number
   rate: number
   rec: SpeechRecognition | null
+  neuralActive: boolean
+  audioCtx: AudioContext | null
+  srcNode: AudioBufferSourceNode | null
+  rafId: number
+  prefetch: Map<number, Promise<{ audio: Float32Array; rate: number }>>
 }
 
 export function useSpeedReader() {
@@ -160,6 +170,11 @@ export function useSpeedReader() {
     ci: 0,
     rate: 1,
     rec: null,
+    neuralActive: false,
+    audioCtx: null,
+    srcNode: null,
+    rafId: 0,
+    prefetch: new Map(),
   }).current
 
   // setState with a post-commit callback (mirrors the prototype's this.setState(patch, cb)).
@@ -195,6 +210,8 @@ export function useSpeedReader() {
       audioOn: s.audioOn,
       readMode: s.readMode,
       voiceURI: s.voiceURI,
+      neuralOn: s.neuralOn,
+      neuralVoice: s.neuralVoice,
     }
     save(STORAGE_KEYS.settings, out)
   }, [])
@@ -283,6 +300,17 @@ export function useSpeedReader() {
 
   const cancelAudio = useCallback(() => {
     r.audioActive = false
+    r.neuralActive = false
+    try {
+      r.srcNode?.stop()
+    } catch {
+      /* no-op */
+    }
+    r.srcNode = null
+    if (r.rafId) {
+      cancelAnimationFrame(r.rafId)
+      r.rafId = 0
+    }
     try {
       window.speechSynthesis?.cancel()
     } catch {
@@ -295,6 +323,8 @@ export function useSpeedReader() {
   const tick = useRef<() => void>(() => {})
   const speakChunk = useRef<() => void>(() => {})
   const playAudio = useRef<() => void>(() => {})
+  const playNeural = useRef<() => void>(() => {})
+  const neuralChunk = useRef<() => void>(() => {})
 
   commitSession.current = (finished?: boolean) => {
     if (!r.sessionStart) return
@@ -426,6 +456,138 @@ export function useSpeedReader() {
     speakChunk.current()
   }
 
+  // ---- neural audio (on-device Kokoro TTS) -------------------------------
+  // Generates each sentence-chunk locally, plays it through Web Audio, and syncs
+  // the word highlight to the produced clip's duration. Falls back to the system
+  // voice if the model can't load. Nothing is uploaded.
+  playNeural.current = () => {
+    const AC =
+      window.AudioContext ||
+      (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext
+    if (!AC) {
+      playAudio.current()
+      return
+    }
+    if (!r.audioCtx) r.audioCtx = new AC()
+    r.audioCtx.resume?.().catch(() => {})
+
+    const w = stateRef.current.words
+    const chunks: AudioChunk[] = []
+    let i = stateRef.current.idx
+    while (i < w.length) {
+      let j = i
+      let cnt = 0
+      const parts: string[] = []
+      while (j < w.length) {
+        const tk = w[j]
+        parts.push(tk)
+        cnt++
+        j++
+        if (/[.!?…]["')\]]?$/.test(tk) && cnt >= 3) break
+        if (cnt >= 24) break
+      }
+      chunks.push({ text: parts.join(' '), start: i, offsets: [], count: cnt })
+      i = j
+    }
+    r.chunks = chunks
+    r.ci = 0
+    r.neuralActive = true
+    r.prefetch = new Map()
+    setState({
+      neuralStatus: hasWebGPU() ? 'Loading voice…' : 'Loading voice (no GPU — may be slow)…',
+    })
+    loadKokoro((pct) => {
+      if (r.neuralActive) setState({ neuralStatus: `Downloading voice… ${pct}%` })
+    })
+      .then(() => {
+        if (!r.neuralActive) return
+        setState({ neuralStatus: '' })
+        neuralChunk.current()
+      })
+      .catch(() => {
+        r.neuralActive = false
+        setState({ neuralStatus: 'On-device voice failed — using the device voice.' })
+        if (stateRef.current.playing && window.speechSynthesis) playAudio.current()
+      })
+  }
+
+  neuralChunk.current = () => {
+    if (!r.neuralActive || !r.audioCtx) return
+    const ctx = r.audioCtx
+    if (r.ci >= r.chunks.length) {
+      finish.current()
+      return
+    }
+    const c = r.chunks[r.ci]
+    const voice = stateRef.current.neuralVoice
+    const speed = neuralSpeed(stateRef.current.wpm)
+    const clipP = r.prefetch.get(r.ci) || neuralSynth(c.text, voice, speed)
+    clipP
+      .then((clip) => {
+        if (!r.neuralActive) return
+        const ni = r.ci + 1
+        if (ni < r.chunks.length && !r.prefetch.has(ni)) {
+          r.prefetch.set(
+            ni,
+            neuralSynth(r.chunks[ni].text, voice, speed).catch(() => ({
+              audio: new Float32Array(0),
+              rate: clip.rate,
+            })),
+          )
+        }
+        if (!clip.audio.length) {
+          r.ci++
+          neuralChunk.current()
+          return
+        }
+        const buf = ctx.createBuffer(1, clip.audio.length, clip.rate)
+        buf.getChannelData(0).set(clip.audio)
+        const src = ctx.createBufferSource()
+        src.buffer = buf
+        src.connect(ctx.destination)
+        r.srcNode = src
+        const toks = stateRef.current.words.slice(c.start, c.start + c.count)
+        const weights = toks.map((t) => Math.max(1, t.length))
+        const totalW = weights.reduce((a, b) => a + b, 0) || 1
+        const bounds: number[] = []
+        let acc = 0
+        for (const wt of weights) {
+          acc += (wt / totalW) * buf.duration
+          bounds.push(acc)
+        }
+        const startAt = ctx.currentTime
+        const step = () => {
+          if (!r.neuralActive) return
+          const el = ctx.currentTime - startAt
+          let wi = 0
+          while (wi < bounds.length && bounds[wi] <= el) wi++
+          const idx = Math.min(c.start + wi, stateRef.current.words.length)
+          if (idx !== stateRef.current.idx) {
+            setState({ idx })
+            maybeToast(idx)
+          }
+          r.rafId = requestAnimationFrame(step)
+        }
+        src.onended = () => {
+          if (!r.neuralActive) return
+          if (r.rafId) {
+            cancelAnimationFrame(r.rafId)
+            r.rafId = 0
+          }
+          setState({ idx: Math.min(c.start + c.count, stateRef.current.words.length) })
+          r.ci++
+          neuralChunk.current()
+        }
+        src.start()
+        r.rafId = requestAnimationFrame(step)
+      })
+      .catch(() => {
+        if (!r.neuralActive) return
+        r.ci++
+        neuralChunk.current()
+      })
+  }
+
   const play = useCallback(() => {
     const s = stateRef.current
     if (!s.words.length) return
@@ -438,7 +600,8 @@ export function useSpeedReader() {
     r.lastKm = Math.floor(r.baseWords / 1000)
     setState({ idx, playing: true, chromeHidden: false }, () => {
       scheduleHide()
-      if (stateRef.current.audioOn && window.speechSynthesis) playAudio.current()
+      if (stateRef.current.audioOn && stateRef.current.neuralOn) playNeural.current()
+      else if (stateRef.current.audioOn && window.speechSynthesis) playAudio.current()
       else tick.current()
     })
   }, [r, scheduleHide, setState])
@@ -497,7 +660,14 @@ export function useSpeedReader() {
     (v: number) => {
       setState({ wpm: v }, () => {
         persistSettings()
-        if (stateRef.current.playing && stateRef.current.audioOn && window.speechSynthesis) {
+        // System audio restarts to apply the new rate; neural doesn't (it would
+        // regenerate on every drag — the new speed applies to the next play).
+        if (
+          stateRef.current.playing &&
+          stateRef.current.audioOn &&
+          !stateRef.current.neuralOn &&
+          window.speechSynthesis
+        ) {
           cancelAudio()
           playAudio.current()
         }
@@ -822,12 +992,38 @@ export function useSpeedReader() {
     if (stateRef.current.playing) {
       clearTimeout(r.timer)
       cancelAudio()
-      if (on && window.speechSynthesis) {
+      if (on && stateRef.current.neuralOn) playNeural.current()
+      else if (on && window.speechSynthesis) {
         r.audioActive = true
         playAudio.current()
       } else tick.current()
     } else if (!on) cancelAudio()
   }, [cancelAudio, r, set])
+
+  const toggleNeural = useCallback(() => {
+    const on = !stateRef.current.neuralOn
+    set({ neuralOn: on })
+    if (stateRef.current.playing && stateRef.current.audioOn) {
+      clearTimeout(r.timer)
+      cancelAudio()
+      if (on) playNeural.current()
+      else if (window.speechSynthesis) {
+        r.audioActive = true
+        playAudio.current()
+      } else tick.current()
+    }
+  }, [cancelAudio, r, set])
+
+  const setNeuralVoice = useCallback(
+    (v: string) => {
+      set({ neuralVoice: v })
+      if (stateRef.current.playing && stateRef.current.audioOn && stateRef.current.neuralOn) {
+        cancelAudio()
+        playNeural.current()
+      }
+    },
+    [cancelAudio, set],
+  )
 
   // ---- panels + settings toggles ----------------------------------------
   const openIntake = useCallback(() => setState({ panel: 'intake' }), [setState])
@@ -1026,6 +1222,8 @@ export function useSpeedReader() {
       setVoice,
       previewVoice,
       toggleAudio,
+      toggleNeural,
+      setNeuralVoice,
       dismissToast,
       openIntake,
       openLibrary,

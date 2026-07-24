@@ -180,7 +180,23 @@ export function ControlCard({ s, d, a }: { s: ReaderState; d: Derived; a: Reader
         </button>
       </div>
 
-      {s.audioOn && (s.voices?.length || 0) > 0 && !hasQualityVoice(s.voices) && (
+      {s.neuralStatus && (
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 7,
+            marginTop: 10,
+            font: '500 11.5px/1.35 sans-serif',
+            color: t.sub,
+          }}
+        >
+          <span aria-hidden style={{ color: t.accent, fontSize: 13, flex: 'none' }}>♪</span>
+          {s.neuralStatus}
+        </div>
+      )}
+
+      {s.audioOn && !s.neuralOn && (s.voices?.length || 0) > 0 && !hasQualityVoice(s.voices) && (
         <button
           onClick={a.openVoiceSettings}
           style={{
