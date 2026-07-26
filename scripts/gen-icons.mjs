@@ -7,10 +7,10 @@ import sharp from 'sharp'
 import opentype from 'opentype.js'
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 
-// One rule governs both marks: the red letter is the ORP pivot of whatever is
-// written — the same letter the reading engine would land on. orp('Fr') is 1,
-// giving the monogram its red "r"; orp('Flashread') is 2, giving the wordmark
-// its red "a". Neither index is typed in below; both are computed.
+// One rule governs every mark here: the red letter is the ORP pivot of what is
+// written — the same letter the reading engine would land on. orp('Flashread')
+// is 2, so the icon and the wordmark both redden the "a". The index is computed
+// below, never typed in, so the marks cannot drift from the engine.
 const CREAM = '#f3efe7'
 const RED = '#e5484d'
 const BG = '#0e0d0c'
@@ -69,9 +69,9 @@ const advance = (text, size, ls = BASE_LS) =>
  * box so callers can position by real ink rather than by font metrics.
  */
 function pivotRuns(text, { size, x = 0, y = 0, ink, red, pivotAt, ls = BASE_LS }) {
-  // pivotAt overrides the rule for a fragment of a longer word — the stacked
-  // icon splits "Flashread" across two lines but the pivot still belongs to
-  // the whole name, so each line is told where (or whether) it falls.
+  // pivotAt overrides the rule for a fragment of a longer word: if the name is
+  // ever split across lines, the pivot still belongs to the whole word, so each
+  // line has to be told where — or whether — it falls. -1 means "no pivot here".
   const i = pivotAt === undefined ? orp(text) : pivotAt
   const parts =
     i < 0 || i >= text.length
@@ -100,16 +100,18 @@ const union = (runs) => ({
 const toPaths = (runs) => runs.map((r) => `<path d="${r.d}" fill="${r.fill}"/>`).join('')
 
 // ---------------------------------------------------------------------------
-// Square icon: the full name, stacked.
+// Square icon: the full name on a single line.
 //
-// Set on one line, nine letters of Georgia inside a 192px home-screen tile give
-// roughly 20px per glyph, and under 2px in a favicon. Breaking it across two
-// lines is what makes the whole word usable at icon sizes — each line is set
-// about two and a half times larger than the single-line version could be.
-// "Flash" / "read" is also where the compound wants to break, and the pivot
-// stays put: orp('Flashread') is 2, which lands in the first line.
+// A nine-letter word in a square is inherently wide and short, so the glyphs
+// end up small — roughly 20px each in a 192px home-screen tile — with empty
+// space above and below. It is set as near edge-to-edge as the tile allows to
+// claw back what size there is. The red letter is not placed by hand:
+// orp('Flashread') is 2, so the engine picks the "a".
+//
+// STACK is still a list because the layout below handles multiple lines; it
+// simply holds one entry now.
 const ICON = 512
-const STACK = ['Flash', 'read']
+const STACK = ['Flashread']
 const NAME = STACK.join('')
 
 // Which line holds the pivot, and where in that line.
@@ -141,10 +143,10 @@ function stackRuns({ ink, red, targetW, cx, cy }) {
   const natural = STACK.map((l) => inkW(l, BASE_LS))
   const widest = Math.max(...natural)
 
-  // Track each short line out to the widest one. Ink width grows linearly with
-  // tracking across the n-1 internal gaps, so the required value is exact, not
-  // iterated. Justifying the stack this way is what makes it read as a designed
-  // lockup rather than two centred lines that happen to sit together.
+  // Track any short line out to the widest one. Ink width grows linearly with
+  // tracking across the n-1 internal gaps, so the required value is exact
+  // rather than iterated. A no-op while STACK holds a single line, and what
+  // justifies the pair if it ever holds two again.
   const tracking = STACK.map((line, i) => {
     const gaps = line.length - 1
     if (gaps < 1) return BASE_LS
@@ -192,8 +194,9 @@ const stackSvg = (size, targetW, bg, rx = 0) => {
   }
 }
 
-// "any" icons carry the mark at full size.
-const main = stackSvg(ICON, ICON * 0.8, true)
+// "any" icons carry the mark at full size. A single line is short enough
+// vertically to run close to the tile edges without crowding.
+const main = stackSvg(ICON, ICON * 0.92, true)
 const buf = Buffer.from(main.svg)
 await sharp(buf).resize(ICON, ICON).png().toFile('public/icon-512.png')
 await sharp(buf).resize(192, 192).png().toFile('public/icon-192.png')
@@ -201,10 +204,12 @@ await sharp(buf).resize(180, 180).png().toFile('public/apple-touch-icon.png')
 
 // Maskable is a separate file, not the same one reused. Android crops maskable
 // icons to an arbitrary shape and only guarantees a centred circle of 80% the
-// width; a mark sized for the "any" tile loses the ends of "Flash" to that
-// crop. This one is sized so its diagonal fits inside that circle.
+// width; a mark sized for the "any" tile loses its first and last letters to
+// that crop. This one is sized so its diagonal fits inside that circle — for a
+// wide, short mark the diagonal is barely more than the width, so it can stay
+// close to the full 80%.
 const SAFE_D = ICON * 0.8
-const maskable = stackSvg(ICON, ICON * 0.56, true)
+const maskable = stackSvg(ICON, ICON * 0.76, true)
 if (maskable.diag > SAFE_D) {
   console.error(
     `maskable mark diagonal ${maskable.diag.toFixed(0)} exceeds the ${SAFE_D} safe circle — reduce its targetW`,
@@ -215,7 +220,7 @@ await sharp(Buffer.from(maskable.svg)).resize(ICON, ICON).png().toFile('public/i
 
 // Browser-tab favicon keeps its own rounded corners.
 const FAV = 64
-writeFileSync('public/favicon.svg', stackSvg(FAV, ICON * 0.8, true, 120).svg + '\n')
+writeFileSync('public/favicon.svg', stackSvg(FAV, ICON * 0.92, true, 120).svg + '\n')
 
 // ---------------------------------------------------------------------------
 // Wordmark — the full name on one line, for lockups, the landing page and

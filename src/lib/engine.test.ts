@@ -29,9 +29,6 @@ describe('orp', () => {
     // scripts/gen-icons.mjs mirrors this rule to colour the exported marks; if
     // this moves, the logos are no longer the engine's output on their own text.
     expect(splitPivot('Flashread').pivot).toBe('a')
-    // The icon stacks the name as "Flash" / "read". Index 2 has to stay inside
-    // the first line, or the red letter lands on the wrong row.
-    expect(orp('Flashread')).toBeLessThan('Flash'.length)
   })
 })
 
