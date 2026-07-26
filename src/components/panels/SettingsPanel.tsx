@@ -157,65 +157,85 @@ export function SettingsPanel({ s, d, a }: { s: ReaderState; d: Derived; a: Read
         </div>
       </div>
 
-      {enVoices.length > 0 && (
-        <div ref={voiceRef} style={{ scrollMarginTop: 8 }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 11 }}>
-            <div style={{ ...sectionLabel, marginBottom: 0, color: t.sub }}>Narration voice</div>
-            <button
-              onClick={a.previewVoice}
-              style={{
-                font: '600 11px/1 sans-serif',
-                color: t.accent,
-                background: 'transparent',
-                border: `1px solid ${t.accent}`,
-                borderRadius: 8,
-                padding: '7px 11px',
-                cursor: 'pointer',
-              }}
-            >
-              Preview
-            </button>
-          </div>
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-            {voiceOpts.map((v, i) => (
+      <div ref={voiceRef} style={{ scrollMarginTop: 8 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 11 }}>
+          <div style={{ ...sectionLabel, marginBottom: 0, color: t.sub }}>Narration voice</div>
+          <button
+            onClick={s.neuralOn ? a.previewNeural : a.previewVoice}
+            style={{
+              font: '600 11px/1 sans-serif',
+              color: t.accent,
+              background: 'transparent',
+              border: `1px solid ${t.accent}`,
+              borderRadius: 8,
+              padding: '7px 11px',
+              cursor: 'pointer',
+            }}
+          >
+            Preview
+          </button>
+        </div>
+
+        {/* Engine: device voices vs on-device neural */}
+        <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
+          <button onClick={() => s.neuralOn && a.toggleNeural()} style={pillStyle(t, !s.neuralOn)}>
+            Device
+          </button>
+          <button onClick={() => !s.neuralOn && a.toggleNeural()} style={pillStyle(t, s.neuralOn)}>
+            Neural · beta
+          </button>
+        </div>
+
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          {s.neuralOn ? (
+            KOKORO_VOICES.map((v) => (
+              <button key={v.id} onClick={() => a.setNeuralVoice(v.id)} style={pillStyle(t, s.neuralVoice === v.id)}>
+                {v.label}
+              </button>
+            ))
+          ) : enVoices.length > 0 ? (
+            voiceOpts.map((v, i) => (
               <button key={i} onClick={() => a.setVoice(v.uri)} style={pillStyle(t, v.active)}>
                 {v.label}
               </button>
-            ))}
-          </div>
-          <div style={{ font: '400 11px/1.5 sans-serif', color: t.sub, marginTop: 8 }}>
-            Voices come from your device, generated on-device as you read — nothing is uploaded. For much more
-            natural audio on iPhone/iPad, download an “Enhanced” or Siri voice in{' '}
-            <span style={{ color: t.text }}>Settings → Accessibility → Spoken Content → Voices</span>; Flashread
-            picks it automatically. Voices marked ✦ are the highest quality.
-          </div>
+            ))
+          ) : (
+            <div style={{ font: '400 12px/1.5 sans-serif', color: t.sub }}>No device voices detected.</div>
+          )}
         </div>
-      )}
 
-      <div>
-        <div style={label}>On-device voice · beta</div>
-        <Toggle
-          t={t}
-          on={s.neuralOn}
-          onClick={a.toggleNeural}
-          title="Neural voice (on-device)"
-          desc="A far more natural voice that runs entirely on your device. First use downloads ~80 MB once; turn on Audio in the reader to hear it."
-        />
-        {s.neuralOn && (
-          <div style={{ marginTop: 12 }}>
-            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-              {KOKORO_VOICES.map((v) => (
-                <button key={v.id} onClick={() => a.setNeuralVoice(v.id)} style={pillStyle(t, s.neuralVoice === v.id)}>
-                  {v.label}
-                </button>
-              ))}
-            </div>
-            <div style={{ font: '400 11px/1.5 sans-serif', color: t.sub, marginTop: 8 }}>
-              Generated locally — nothing is uploaded, and it works offline after the first download. On phones the
-              first sentence can take a moment to generate; it needs a modern browser (WebGPU preferred).
-            </div>
+        {s.neuralOn && s.neuralStatus && (
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+              marginTop: 8,
+              font: '500 11px/1.4 sans-serif',
+              color: t.sub,
+            }}
+          >
+            <span aria-hidden style={{ color: t.accent }}>♪</span>
+            {s.neuralStatus}
           </div>
         )}
+
+        <div style={{ font: '400 11px/1.5 sans-serif', color: t.sub, marginTop: 8 }}>
+          {s.neuralOn ? (
+            <>
+              A far more natural voice, generated locally — nothing is uploaded, and it works offline after a one-time
+              ~80&nbsp;MB download. Best in a WebGPU browser; the first sentence can take a moment on phones. Turn on{' '}
+              <span style={{ color: t.text }}>Audio</span> in the reader to listen.
+            </>
+          ) : (
+            <>
+              Voices come from your device, generated on-device — nothing is uploaded. For much more natural audio on
+              iPhone/iPad, download an “Enhanced” or Siri voice in{' '}
+              <span style={{ color: t.text }}>Settings → Accessibility → Spoken Content → Voices</span>. Voices marked
+              ✦ are the highest quality.
+            </>
+          )}
+        </div>
       </div>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>

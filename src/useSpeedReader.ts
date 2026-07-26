@@ -986,6 +986,38 @@ export function useSpeedReader() {
     synth.speak(u)
   }, [chosenVoice])
 
+  // Loads (downloading on first use) the neural model and speaks a short sample
+  // so the voice can be auditioned before committing to a whole reading session.
+  const previewNeural = useCallback(() => {
+    const AC =
+      window.AudioContext ||
+      (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext
+    if (!AC) return
+    if (!r.audioCtx) r.audioCtx = new AC()
+    r.audioCtx.resume?.().catch(() => {})
+    setState({ neuralStatus: hasWebGPU() ? 'Loading voice…' : 'Loading voice (no GPU — may be slow)…' })
+    loadKokoro((pct) => setState({ neuralStatus: `Downloading voice… ${pct}%` }))
+      .then(() =>
+        neuralSynth(
+          'The quick brown fox jumps over the lazy dog.',
+          stateRef.current.neuralVoice,
+          neuralSpeed(stateRef.current.wpm),
+        ),
+      )
+      .then((clip) => {
+        setState({ neuralStatus: '' })
+        const ctx = r.audioCtx
+        if (!ctx || !clip.audio.length) return
+        const buf = ctx.createBuffer(1, clip.audio.length, clip.rate)
+        buf.getChannelData(0).set(clip.audio)
+        const src = ctx.createBufferSource()
+        src.buffer = buf
+        src.connect(ctx.destination)
+        src.start()
+      })
+      .catch(() => setState({ neuralStatus: 'Preview failed to load the voice.' }))
+  }, [r, setState])
+
   const toggleAudio = useCallback(() => {
     const on = !stateRef.current.audioOn
     set({ audioOn: on })
@@ -1221,6 +1253,7 @@ export function useSpeedReader() {
       resetCal,
       setVoice,
       previewVoice,
+      previewNeural,
       toggleAudio,
       toggleNeural,
       setNeuralVoice,
