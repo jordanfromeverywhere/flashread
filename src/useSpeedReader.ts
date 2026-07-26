@@ -149,6 +149,9 @@ interface Refs {
   srcNode: AudioBufferSourceNode | null
   rafId: number
   prefetch: Map<number, Promise<{ audio: Float32Array; rate: number }>>
+  // Storage-full is warned about once per app run: persistProgress writes on
+  // every pause, and a toast on each one would be its own kind of broken.
+  quotaWarned: boolean
 }
 
 export function useSpeedReader() {
@@ -175,6 +178,7 @@ export function useSpeedReader() {
     srcNode: null,
     rafId: 0,
     prefetch: new Map(),
+    quotaWarned: false,
   }).current
 
   // setState with a post-commit callback (mirrors the prototype's this.setState(patch, cb)).
@@ -266,6 +270,19 @@ export function useSpeedReader() {
     [r, showToast],
   )
 
+  // The library is the one store holding data the user would miss, and it is
+  // also the one that overflows: entries carry full document text against a
+  // ~5MB quota. A failed write is reported rather than swallowed.
+  const saveLibrary = useCallback(
+    (lib: LibraryItem[]) => {
+      if (save(STORAGE_KEYS.library, lib)) return
+      if (r.quotaWarned) return
+      r.quotaWarned = true
+      showToast('Storage full', 'Delete something from the library — new texts are not being saved')
+    },
+    [r, showToast],
+  )
+
   const persistProgress = useCallback(() => {
     const s = stateRef.current
     if (!s.currentId) return
@@ -275,8 +292,8 @@ export function useSpeedReader() {
         : x,
     )
     setState({ library: lib })
-    save(STORAGE_KEYS.library, lib)
-  }, [setState])
+    saveLibrary(lib)
+  }, [saveLibrary, setState])
 
   const scheduleHide = useCallback(() => {
     clearTimeout(r.hideT)
@@ -522,6 +539,10 @@ export function useSpeedReader() {
     const voice = stateRef.current.neuralVoice
     const speed = neuralSpeed(stateRef.current.wpm)
     const clipP = r.prefetch.get(r.ci) || neuralSynth(c.text, voice, speed)
+    // Consumed — drop it. Entries hold decoded PCM (roughly 750KB per 24-word
+    // chunk at 24kHz), so retaining them meant a book-length read accumulated
+    // every clip it had ever spoken.
+    r.prefetch.delete(r.ci)
     clipP
       .then((clip) => {
         if (!r.neuralActive) return
@@ -620,10 +641,20 @@ export function useSpeedReader() {
     else play()
   }, [pause, play])
 
+  // Every path that stops playback banks the session first. commitSession is a
+  // no-op when nothing is running, so this is safe to call unconditionally —
+  // and it has to happen before idx moves, since the session's word count is
+  // measured against the current index. Without it, scrubbing or stepping mid-
+  // read silently discarded that stretch of reading from the stats.
+  const stopPlayback = useCallback(() => {
+    clearTimeout(r.timer)
+    cancelAudio()
+    commitSession.current()
+  }, [cancelAudio, r])
+
   const jump = useCallback(
     (i: number) => {
-      clearTimeout(r.timer)
-      cancelAudio()
+      stopPlayback()
       setState({
         idx: Math.max(0, Math.min(i, stateRef.current.words.length)),
         playing: false,
@@ -631,20 +662,18 @@ export function useSpeedReader() {
       })
       persistProgress()
     },
-    [cancelAudio, persistProgress, r, setState],
+    [persistProgress, setState, stopPlayback],
   )
 
   const stepFwd = useCallback(() => {
-    clearTimeout(r.timer)
-    cancelAudio()
+    stopPlayback()
     setState((s) => ({ idx: Math.min(s.idx + s.chunk, s.words.length), playing: false, chromeHidden: false }))
-  }, [cancelAudio, r, setState])
+  }, [setState, stopPlayback])
 
   const stepBack = useCallback(() => {
-    clearTimeout(r.timer)
-    cancelAudio()
+    stopPlayback()
     setState((s) => ({ idx: Math.max(0, s.idx - s.chunk), playing: false, chromeHidden: false }))
-  }, [cancelAudio, r, setState])
+  }, [setState, stopPlayback])
 
   const restart = useCallback(() => jump(0), [jump])
 
@@ -751,7 +780,7 @@ export function useSpeedReader() {
       if (existing) {
         const lib = [existing, ...s.library.filter((x) => x.id !== existing.id)]
         setState({ library: lib })
-        save(STORAGE_KEYS.library, lib)
+        saveLibrary(lib)
         loadWords(existing.text, existing.title, existing.id, Math.min(existing.idx || 0, words.length))
         return
       }
@@ -766,7 +795,7 @@ export function useSpeedReader() {
       }
       const lib = [entry, ...s.library.filter((x) => x.id !== id)].slice(0, 60)
       setState({ library: lib })
-      save(STORAGE_KEYS.library, lib)
+      saveLibrary(lib)
       loadWords(text, entry.title, id, 0)
     },
     [loadWords, setState],
@@ -796,7 +825,7 @@ export function useSpeedReader() {
       const s = stateRef.current
       const lib = s.library.filter((x) => x.id !== id)
       setState({ library: lib, currentId: s.currentId === id ? null : s.currentId })
-      save(STORAGE_KEYS.library, lib)
+      saveLibrary(lib)
     },
     [setState],
   )
@@ -821,7 +850,7 @@ export function useSpeedReader() {
       renameText: '',
       title: s.currentId === id && nt ? nt : s.title,
     })
-    save(STORAGE_KEYS.library, lib)
+    saveLibrary(lib)
   }, [setState])
 
   // ---- intake ------------------------------------------------------------
@@ -1117,8 +1146,11 @@ export function useSpeedReader() {
   onKey.current = (e) => {
     const s = stateRef.current
     if (s.panel) return
-    const tag = (e.target as HTMLElement)?.tagName?.toLowerCase() || ''
-    if (tag === 'input' || tag === 'textarea') return
+    // Leave every focusable control to its own key handling. Claiming Space
+    // globally stole it from whatever button a keyboard user had focused, so
+    // Space activated playback instead of the button under the cursor ring.
+    const el = e.target as HTMLElement | null
+    if (el?.closest?.('input,textarea,select,button,a,[role="slider"],[contenteditable]')) return
     if (e.code === 'Space') {
       e.preventDefault()
       if (e.repeat) return
@@ -1227,6 +1259,7 @@ export function useSpeedReader() {
       toggle,
       play,
       pause,
+      jump,
       stepFwd,
       stepBack,
       restart,

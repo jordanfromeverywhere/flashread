@@ -70,16 +70,51 @@ export function ControlCard({ s, d, a }: { s: ReaderState; d: Derived; a: Reader
         >
           {posText}
         </button>
+        {/* A real slider: focusable, arrow/Home/End driven and announced with
+            its position. The visible bar stays 6px, but the padding/margin pair
+            widens the touch target to ~30px without moving anything — 6px was
+            well under the 44px target size the rest of the app respects. */}
         <div
           onClick={a.onScrub}
-          style={{ flex: 1, height: 6, borderRadius: 4, background: t.border, position: 'relative', cursor: 'pointer' }}
+          onKeyDown={(e) => {
+            if (e.key === 'ArrowRight') a.stepFwd()
+            else if (e.key === 'ArrowLeft') a.stepBack()
+            else if (e.key === 'Home') a.jump(0)
+            else if (e.key === 'End') a.jump(total)
+            else if (e.key === 'PageUp') a.jump(idx - 25)
+            else if (e.key === 'PageDown') a.jump(idx + 25)
+            else return
+            e.preventDefault()
+          }}
+          role="slider"
+          tabIndex={0}
+          aria-label="Reading position"
+          aria-valuemin={0}
+          aria-valuemax={total}
+          aria-valuenow={idx}
+          aria-valuetext={`${pctDone}% — word ${idx} of ${total}`}
+          style={{
+            flex: 1,
+            // box-sizing is border-box app-wide, so the height carries the
+            // padding: 6px of visible bar inside 24px of invisible hit area.
+            // The negative margin cancels that padding in layout, leaving the
+            // row exactly as tall as it was before.
+            height: 30,
+            borderRadius: 4,
+            background: t.border,
+            position: 'relative',
+            cursor: 'pointer',
+            padding: '12px 0',
+            margin: '-12px 0',
+            backgroundClip: 'content-box',
+          }}
         >
           <div
             style={{
               position: 'absolute',
               left: 0,
-              top: 0,
-              bottom: 0,
+              top: 12,
+              bottom: 12,
               width: d.pctW,
               background: t.accent,
               borderRadius: 4,

@@ -12,11 +12,21 @@ export function load<T>(key: string, fallback: T): T {
   }
 }
 
-export function save<T>(key: string, value: T): void {
+/**
+ * Persists `value`, returning false if the write failed — almost always
+ * localStorage's ~5MB quota, since library entries carry the full document
+ * text, or a private-mode browser that refuses writes outright.
+ *
+ * Callers holding user data must surface a false return. Swallowing it means a
+ * save the user believes happened silently did not, and they only find out when
+ * the library comes back empty.
+ */
+export function save<T>(key: string, value: T): boolean {
   try {
     localStorage.setItem(key, JSON.stringify(value))
+    return true
   } catch {
-    /* quota / private mode — non-fatal */
+    return false
   }
 }
 

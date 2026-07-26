@@ -114,6 +114,8 @@ export function dwell(i: number, p: DwellParams): number {
 }
 
 // Rough estimate of remaining time from `idx` to the end, in milliseconds.
+// The 1.18 stands in for the average slow-down adaptive pacing applies across a
+// document; it is a headline estimate, not a sum of real dwells.
 export function estRemaining(
   words: string[],
   idx: number,
@@ -121,11 +123,12 @@ export function estRemaining(
   chunk: number,
   adaptive: boolean,
 ): number {
-  let ms = 0
-  for (let i = idx; i < words.length; i += chunk) {
-    ms += (60000 / wpm) * chunk * (adaptive ? 1.18 : 1)
-  }
-  return ms
+  // Closed form. This was a loop over every remaining word accumulating a term
+  // that never depended on the index — O(n) for a constant, re-run by derive()
+  // on every render, so several times a second while playing on a book-length
+  // document.
+  const steps = Math.max(0, Math.ceil((words.length - idx) / chunk))
+  return steps * (60000 / wpm) * chunk * (adaptive ? 1.18 : 1)
 }
 
 const SENTENCE_END = /[.!?…]["')\]]?$/
