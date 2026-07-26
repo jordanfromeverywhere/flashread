@@ -4,7 +4,7 @@
 // - Other same-origin GETs (hashed JS/CSS/fonts, icons): cache-first, since Vite
 //   fingerprints them and they never change under a given URL.
 // Bump CACHE to invalidate everything on the next visit.
-const CACHE = 'flashread-v5'
+const CACHE = 'flashread-v6'
 
 self.addEventListener('install', () => self.skipWaiting())
 

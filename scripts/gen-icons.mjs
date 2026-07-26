@@ -54,26 +54,37 @@ if (!fontPath) {
 // parse(), not the deprecated loadSync() — the latter returns undefined here.
 const font = opentype.parse(readFileSync(fontPath).buffer)
 
-// -0.02em, matching the letter-spacing the in-app <Wordmark> uses.
-const TYPE = { kerning: true, letterSpacing: -0.02 }
-const advance = (text, size) => (text ? font.getAdvanceWidth(text, size, TYPE) : 0)
+// -0.02em, matching the letter-spacing the in-app <Wordmark> uses. Individual
+// lines can override it — see the stacked icon, which tracks its short line out
+// to meet the long one.
+const BASE_LS = -0.02
+const typeOpts = (ls = BASE_LS) => ({ kerning: true, letterSpacing: ls })
+const TYPE = typeOpts()
+const advance = (text, size, ls = BASE_LS) =>
+  text ? font.getAdvanceWidth(text, size, typeOpts(ls)) : 0
 
 /**
  * Splits `text` at its ORP pivot and returns one outlined path per colour run,
  * laid out along a baseline starting at `x`. Each run carries its own bounding
  * box so callers can position by real ink rather than by font metrics.
  */
-function pivotRuns(text, { size, x = 0, y = 0, ink, red }) {
-  const i = orp(text)
-  const parts = [
-    { text: text.slice(0, i), fill: ink },
-    { text: text[i], fill: red },
-    { text: text.slice(i + 1), fill: ink },
-  ].filter((p) => p.text)
+function pivotRuns(text, { size, x = 0, y = 0, ink, red, pivotAt, ls = BASE_LS }) {
+  // pivotAt overrides the rule for a fragment of a longer word — the stacked
+  // icon splits "Flashread" across two lines but the pivot still belongs to
+  // the whole name, so each line is told where (or whether) it falls.
+  const i = pivotAt === undefined ? orp(text) : pivotAt
+  const parts =
+    i < 0 || i >= text.length
+      ? [{ text, fill: ink }]
+      : [
+          { text: text.slice(0, i), fill: ink },
+          { text: text[i], fill: red },
+          { text: text.slice(i + 1), fill: ink },
+        ].filter((p) => p.text)
 
   let consumed = ''
   return parts.map(({ text: run, fill }) => {
-    const path = font.getPath(run, x + advance(consumed, size), y, size, TYPE)
+    const path = font.getPath(run, x + advance(consumed, size, ls), y, size, typeOpts(ls))
     consumed += run
     return { d: path.toPathData(2), fill, box: path.getBoundingBox() }
   })
@@ -89,46 +100,127 @@ const union = (runs) => ({
 const toPaths = (runs) => runs.map((r) => `<path d="${r.d}" fill="${r.fill}"/>`).join('')
 
 // ---------------------------------------------------------------------------
-// Square icon. Full-bleed (the OS applies its own rounded mask on the home
-// screen); the monogram is centred on its ink box, not on font metrics, so the
-// optical centre is right.
+// Square icon: the full name, stacked.
+//
+// Set on one line, nine letters of Georgia inside a 192px home-screen tile give
+// roughly 20px per glyph, and under 2px in a favicon. Breaking it across two
+// lines is what makes the whole word usable at icon sizes — each line is set
+// about two and a half times larger than the single-line version could be.
+// "Flash" / "read" is also where the compound wants to break, and the pivot
+// stays put: orp('Flashread') is 2, which lands in the first line.
 const ICON = 512
-const iconRuns = (ink, red, size, cx, cy) => {
-  const probe = pivotRuns('Fr', { size, ink, red })
-  const b = union(probe)
-  return pivotRuns('Fr', {
-    size,
-    ink,
-    red,
-    x: cx - (b.x1 + b.x2) / 2,
-    y: cy - (b.y1 + b.y2) / 2,
+const STACK = ['Flash', 'read']
+const NAME = STACK.join('')
+
+// Which line holds the pivot, and where in that line.
+const stackPivots = (() => {
+  const p = orp(NAME)
+  let consumed = 0
+  return STACK.map((line) => {
+    const local = p - consumed
+    consumed += line.length
+    return local >= 0 && local < line.length ? local : -1
   })
+})()
+
+/**
+ * Lays the stacked name out to `targetW`, centred on its ink box at (cx, cy).
+ * Lines are centred against each other first, then the block is centred as a
+ * whole, so the result is optically centred rather than metrically centred.
+ */
+function stackRuns({ ink, red, targetW, cx, cy }) {
+  const NOM = 100
+  const size = (NOM * targetW) / Math.max(...STACK.map((l) => advance(l, NOM)))
+  const lineH = size * 0.92
+
+  // Ink width of each line at base tracking, and the widest of them.
+  const inkW = (line, ls) => {
+    const b = union(pivotRuns(line, { size, ink, red, pivotAt: -1, ls }))
+    return b.x2 - b.x1
+  }
+  const natural = STACK.map((l) => inkW(l, BASE_LS))
+  const widest = Math.max(...natural)
+
+  // Track each short line out to the widest one. Ink width grows linearly with
+  // tracking across the n-1 internal gaps, so the required value is exact, not
+  // iterated. Justifying the stack this way is what makes it read as a designed
+  // lockup rather than two centred lines that happen to sit together.
+  const tracking = STACK.map((line, i) => {
+    const gaps = line.length - 1
+    if (gaps < 1) return BASE_LS
+    return BASE_LS + (widest - natural[i]) / (gaps * size)
+  })
+
+  let runs = []
+  STACK.forEach((line, i) => {
+    runs = runs.concat(
+      pivotRuns(line, {
+        size,
+        x: -advance(line, size, tracking[i]) / 2,
+        y: i * lineH,
+        ink,
+        red,
+        pivotAt: stackPivots[i],
+        ls: tracking[i],
+      }),
+    )
+  })
+
+  const b = union(runs)
+  return {
+    runs,
+    dx: cx - (b.x1 + b.x2) / 2,
+    dy: cy - (b.y1 + b.y2) / 2,
+    w: b.x2 - b.x1,
+    h: b.y2 - b.y1,
+  }
 }
 
-const square =
-  `<svg xmlns="http://www.w3.org/2000/svg" width="${ICON}" height="${ICON}" viewBox="0 0 ${ICON} ${ICON}">` +
-  `<rect width="${ICON}" height="${ICON}" fill="${BG}"/>` +
-  toPaths(iconRuns(CREAM, RED, 300, ICON / 2, ICON / 2)) +
-  `</svg>`
+const stackSvg = (size, targetW, bg, rx = 0) => {
+  const s = stackRuns({ ink: CREAM, red: RED, targetW, cx: 0, cy: 0 })
+  const scale = size / ICON
+  return {
+    svg:
+      `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${ICON} ${ICON}">` +
+      (bg ? `<rect width="${ICON}" height="${ICON}"${rx ? ` rx="${rx}"` : ''} fill="${BG}"/>` : '') +
+      `<g transform="translate(${(ICON / 2 + s.dx).toFixed(2)} ${(ICON / 2 + s.dy).toFixed(2)})">` +
+      toPaths(s.runs) +
+      `</g></svg>`,
+    diag: Math.hypot(s.w, s.h) * scale,
+    w: s.w,
+    h: s.h,
+  }
+}
 
-const buf = Buffer.from(square)
+// "any" icons carry the mark at full size.
+const main = stackSvg(ICON, ICON * 0.8, true)
+const buf = Buffer.from(main.svg)
 await sharp(buf).resize(ICON, ICON).png().toFile('public/icon-512.png')
 await sharp(buf).resize(192, 192).png().toFile('public/icon-192.png')
 await sharp(buf).resize(180, 180).png().toFile('public/apple-touch-icon.png')
 
+// Maskable is a separate file, not the same one reused. Android crops maskable
+// icons to an arbitrary shape and only guarantees a centred circle of 80% the
+// width; a mark sized for the "any" tile loses the ends of "Flash" to that
+// crop. This one is sized so its diagonal fits inside that circle.
+const SAFE_D = ICON * 0.8
+const maskable = stackSvg(ICON, ICON * 0.56, true)
+if (maskable.diag > SAFE_D) {
+  console.error(
+    `maskable mark diagonal ${maskable.diag.toFixed(0)} exceeds the ${SAFE_D} safe circle — reduce its targetW`,
+  )
+  process.exit(1)
+}
+await sharp(Buffer.from(maskable.svg)).resize(ICON, ICON).png().toFile('public/icon-maskable-512.png')
+
 // Browser-tab favicon keeps its own rounded corners.
 const FAV = 64
-const favicon =
-  `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${FAV} ${FAV}">` +
-  `<rect width="${FAV}" height="${FAV}" rx="15" fill="${BG}"/>` +
-  toPaths(iconRuns(CREAM, RED, 37.5, FAV / 2, FAV / 2)) +
-  `</svg>\n`
-writeFileSync('public/favicon.svg', favicon)
+writeFileSync('public/favicon.svg', stackSvg(FAV, ICON * 0.8, true, 120).svg + '\n')
 
 // ---------------------------------------------------------------------------
-// Wordmark — the full name, for lockups, the landing page and store listings.
-// It never replaces the square icon: nine letters of Georgia are unreadable at
-// favicon and home-screen sizes.
+// Wordmark — the full name on one line, for lockups, the landing page and
+// store listings, where there is width to carry it. The icons above stack the
+// same name because a square has no width to spare.
 //
 // The viewBox is the union of the glyph outlines' own bounding boxes, so it is
 // exact by construction — no rasterise-and-trim pass, no dead padding.

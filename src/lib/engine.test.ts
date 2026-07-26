@@ -27,9 +27,11 @@ describe('orp', () => {
 
   it('places the brand marks where the wordmark draws them', () => {
     // scripts/gen-icons.mjs mirrors this rule to colour the exported marks; if
-    // these move, the logos are no longer the engine's output on their own text.
+    // this moves, the logos are no longer the engine's output on their own text.
     expect(splitPivot('Flashread').pivot).toBe('a')
-    expect(splitPivot('Fr').pivot).toBe('r')
+    // The icon stacks the name as "Flash" / "read". Index 2 has to stay inside
+    // the first line, or the red letter lands on the wrong row.
+    expect(orp('Flashread')).toBeLessThan('Flash'.length)
   })
 })
 
