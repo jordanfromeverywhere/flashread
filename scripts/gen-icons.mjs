@@ -1,14 +1,21 @@
-// Regenerates the PWA/home-screen icons from an inline SVG.
-// Run: node scripts/gen-icons.mjs
+// Regenerates the PWA/home-screen icons and the full-name wordmark from inline
+// SVG. Run: node scripts/gen-icons.mjs
 import sharp from 'sharp'
 import { writeFileSync } from 'node:fs'
 
-// The mark: the app's own reading reticle — the word "read" with the pivot
-// letter "e" in red at the exact horizontal centre, framed by the red guide
-// ticks the reader draws above and below the focal point.
+// One rule governs both marks: the red letter is the ORP pivot of whatever is
+// written — the same letter the reading engine would land on. See orp() in
+// src/lib/engine.ts. orp('Fr') === 1 → the "r" of the square monogram;
+// orp('Flashread') === 2 → the "a" of the wordmark. Move a letter here and it
+// stops being the app's own output, so keep the two in step.
 const CREAM = '#f3efe7'
 const RED = '#e5484d'
 const BG = '#0e0d0c'
+
+// Light-surface pair, from THEMES.light in src/lib/theme.ts — the dark red is
+// tuned for contrast on cream and is not interchangeable with RED.
+const INK = '#26221b'
+const RED_ON_LIGHT = '#cf3339'
 
 // Full-bleed square (the OS applies its own rounded mask on the home screen).
 // "Fr" monogram for Flash·read — the second letter in the app's red, echoing
@@ -30,4 +37,45 @@ const rounded = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
 </svg>`
 writeFileSync('public/favicon.svg', rounded + '\n')
 
-console.log('icons written: icon-512, icon-192, apple-touch-icon, favicon.svg')
+// ---------------------------------------------------------------------------
+// Wordmark — the full name, for lockups, the landing page and store listings.
+// It never replaces the square icon: nine letters of Georgia are unreadable at
+// favicon and home-screen sizes.
+//
+// Drawn on an oversized transparent canvas, then measured by rasterising once
+// and trimming, so the emitted viewBox is the true ink box. Guessing it leaves
+// stray padding that misaligns the mark in every consumer.
+const NAME_SIZE = 260
+const draw = (ink, red) =>
+  `<text x="60" y="420" font-family="Georgia, 'Times New Roman', serif" font-weight="700" ` +
+  `font-size="${NAME_SIZE}" letter-spacing="-5">` +
+  `<tspan fill="${ink}">Fl</tspan><tspan fill="${red}">a</tspan><tspan fill="${ink}">shread</tspan></text>`
+
+const probe = `<svg xmlns="http://www.w3.org/2000/svg" width="2000" height="600">${draw(CREAM, CREAM)}</svg>`
+const { info } = await sharp(Buffer.from(probe))
+  .trim({ threshold: 0 })
+  .png()
+  .toBuffer({ resolveWithObject: true })
+
+const PAD = 8
+const boxX = Math.abs(info.trimOffsetLeft ?? 0) - PAD
+const boxY = Math.abs(info.trimOffsetTop ?? 0) - PAD
+const boxW = info.width + PAD * 2
+const boxH = info.height + PAD * 2
+
+// Transparent background so the mark sits on any of the four themes' surfaces.
+const wordmark = (ink, red) =>
+  `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${boxX} ${boxY} ${boxW} ${boxH}" ` +
+  `width="${boxW}" height="${boxH}">${draw(ink, red)}</svg>\n`
+
+writeFileSync('public/wordmark.svg', wordmark(CREAM, RED))
+writeFileSync('public/wordmark-light.svg', wordmark(INK, RED_ON_LIGHT))
+await sharp(Buffer.from(wordmark(CREAM, RED)))
+  .resize({ height: 240 })
+  .png()
+  .toFile('public/wordmark.png')
+
+console.log(
+  `icons written: icon-512, icon-192, apple-touch-icon, favicon.svg\n` +
+    `wordmark written: wordmark.svg, wordmark-light.svg, wordmark.png (${boxW}×${boxH})`,
+)

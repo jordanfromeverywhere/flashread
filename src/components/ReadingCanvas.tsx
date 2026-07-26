@@ -2,6 +2,7 @@ import type { CSSProperties } from 'react'
 import { useLayoutEffect, useRef, useState } from 'react'
 import type { Derived } from '../derive'
 import type { ReaderActions, ReaderState } from '../useSpeedReader'
+import { Wordmark } from './Wordmark'
 
 const MASK =
   'linear-gradient(to bottom,transparent 0,#000 17%,#000 83%,transparent 100%)'
@@ -299,6 +300,7 @@ function EmptyState({ d, a }: { d: Derived; a: ReaderActions }) {
   }
   return (
     <div style={{ textAlign: 'center', animation: 'srrise .4s ease' }}>
+      <Wordmark t={t} size={19} style={{ marginBottom: 18, opacity: 0.9 }} />
       <div style={{ font: '400 33px/1.15 Georgia,serif', letterSpacing: '-.02em', marginBottom: 12 }}>
         Read at the <span style={{ color: t.focus }}>speed</span> of thought.
       </div>
