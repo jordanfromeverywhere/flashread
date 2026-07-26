@@ -1,4 +1,7 @@
-# Flashread
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="public/wordmark.svg">
+  <img alt="Flashread" src="public/wordmark-light.svg" width="300">
+</picture>
 
 An RSVP (rapid serial visual presentation) speed-reader for the web. Words flash
 one at a time at a fixed point, each aligned on its optimal recognition point (the
