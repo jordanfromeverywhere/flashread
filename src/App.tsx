@@ -22,13 +22,18 @@ export default function App() {
   }, [t.bg])
 
   return (
-    <div style={{ width: '100%', minHeight: '100dvh', display: 'flex', justifyContent: 'center', background: t.bg }}>
+    <div
+      className="app-viewport-fill"
+      style={{ width: '100%', display: 'flex', justifyContent: 'center', background: t.bg }}
+    >
+      {/* Height comes from .app-viewport (dvh in-browser, lvh when installed) so
+          the tab rail sits flush on the home bar from first paint on iOS. */}
       <div
+        className="app-viewport"
         style={{
           position: 'relative',
           width: '100%',
           maxWidth: 480,
-          height: '100dvh',
           display: 'flex',
           flexDirection: 'column',
           overflow: 'hidden',

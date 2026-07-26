@@ -11,6 +11,35 @@ body {
   -webkit-font-smoothing: antialiased;
   overscroll-behavior: none;
 }
+
+/* App shell height, cross-device.
+   - Browser tab: 100dvh so the shell tracks the address bar as it shows/hides
+     (falls back to 100vh on browsers without dvh support).
+   - Installed PWA (html.pwa-standalone, set pre-paint in index.html from
+     navigator.standalone + the display-mode media query): 100lvh. On iOS,
+     100dvh/innerHeight report ~60px too small on PWA cold start and only
+     correct after the first scroll, which leaves the bottom tab rail floating
+     above the home bar; 100lvh is stable at the true screen height from first
+     paint. In standalone there is no address bar, so lvh is also correct on
+     Android/desktop.
+   .app-viewport is the fixed-height column; .app-viewport-fill is the centering
+   backdrop behind it (min-height, so it can never clip the column). */
+.app-viewport {
+  height: 100vh;
+  height: 100dvh;
+}
+.app-viewport-fill {
+  min-height: 100vh;
+  min-height: 100dvh;
+}
+html.pwa-standalone .app-viewport {
+  height: 100vh;
+  height: 100lvh;
+}
+html.pwa-standalone .app-viewport-fill {
+  min-height: 100vh;
+  min-height: 100lvh;
+}
 a {
   color: inherit;
 }

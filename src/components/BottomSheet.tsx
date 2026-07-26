@@ -84,7 +84,15 @@ export function BottomSheet({ s, d, a }: { s: ReaderState; d: Derived; a: Reader
             ✕
           </button>
         </div>
-        <div style={{ flex: 1, overflow: 'auto', padding: '8px 20px 44px' }}>
+        {/* Bottom padding clears the device safe-area inset (the iPhone home
+            bar) so the last row of a panel is never sitting under it. */}
+        <div
+          style={{
+            flex: 1,
+            overflow: 'auto',
+            padding: '8px 20px calc(env(safe-area-inset-bottom) + 44px)',
+          }}
+        >
           {s.panel === 'intake' && <IntakePanel s={s} d={d} a={a} />}
           {s.panel === 'library' && <LibraryPanel s={s} d={d} a={a} />}
           {s.panel === 'settings' && <SettingsPanel s={s} d={d} a={a} />}

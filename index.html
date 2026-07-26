@@ -19,6 +19,20 @@
       content="Flashread — read at the speed of thought. An RSVP speed-reader with pivot alignment, adaptive pacing and guided-highlight flow."
     />
     <title>Flashread</title>
+    <!-- Flag an installed (standalone) PWA before first paint so the shell can
+         use 100lvh instead of the cold-start-buggy 100dvh (see .app-viewport in
+         index.css). iOS only exposes navigator.standalone — its display-mode
+         media query does NOT match — so both signals are checked. -->
+    <script>
+      try {
+        if (
+          window.navigator.standalone === true ||
+          (window.matchMedia && matchMedia('(display-mode: standalone)').matches) ||
+          (window.matchMedia && matchMedia('(display-mode: fullscreen)').matches)
+        )
+          document.documentElement.classList.add('pwa-standalone')
+      } catch (e) {}
+    </script>
   </head>
   <body>
     <div id="root"></div>
