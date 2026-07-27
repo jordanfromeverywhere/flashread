@@ -250,7 +250,8 @@ export function SettingsPanel({ s, d, a }: { s: ReaderState; d: Derived; a: Read
           {s.neuralOn ? (
             <>
               A far more natural voice, generated locally — nothing is uploaded, and it works offline after a one-time
-              ~80&nbsp;MB download. Best in a WebGPU browser; the first sentence can take a moment on phones. Turn on{' '}
+              ~80&nbsp;MB download. On iPhone and iPad it runs on the CPU, so the first sentence takes a moment to
+              arrive; keep the app in the foreground while it downloads. Turn on{' '}
               <span style={{ color: t.text }}>Audio</span> in the reader to listen.
             </>
           ) : (

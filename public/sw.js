@@ -4,7 +4,7 @@
 // - Other same-origin GETs (hashed JS/CSS/fonts, icons): cache-first, since Vite
 //   fingerprints them and they never change under a given URL.
 // Bump CACHE to invalidate everything on the next visit.
-const CACHE = 'flashread-v7'
+const CACHE = 'flashread-v8'
 
 self.addEventListener('install', () => self.skipWaiting())
 
@@ -21,6 +21,20 @@ self.addEventListener('activate', (e) => {
 self.addEventListener('fetch', (e) => {
   const req = e.request
   if (req.method !== 'GET') return
+
+  // Leave cross-origin traffic alone. The neural voice pulls ~80MB of model
+  // weights from Hugging Face and its WASM runtime from jsDelivr; routing those
+  // through here bought nothing (they are never cached — wrong origin) and the
+  // handler below answers a failed fetch with `undefined`, which respondWith
+  // turns into a network error. On a phone dropping in and out of signal
+  // mid-download, that killed the download outright.
+  let sameOrigin = false
+  try {
+    sameOrigin = new URL(req.url).origin === self.location.origin
+  } catch {
+    sameOrigin = false
+  }
+  if (!sameOrigin) return
 
   const isNavigation =
     req.mode === 'navigate' || (req.destination === 'document')
@@ -42,18 +56,13 @@ self.addEventListener('fetch', (e) => {
       cache.match(req).then(
         (hit) =>
           hit ||
-          fetch(req)
-            .then((res) => {
-              try {
-                if (res && res.ok && new URL(req.url).origin === self.location.origin) {
-                  cache.put(req, res.clone())
-                }
-              } catch {
-                /* opaque / cross-origin — skip caching */
-              }
-              return res
-            })
-            .catch(() => hit),
+          // No cache entry to fall back on here, so a failed fetch has to reject
+          // — resolving with `undefined` makes respondWith throw a bare network
+          // error that hides what actually went wrong.
+          fetch(req).then((res) => {
+            if (res && res.ok) cache.put(req, res.clone()).catch(() => {})
+            return res
+          }),
       ),
     ),
   )

@@ -14,7 +14,13 @@ import { THEME_ORDER } from './lib/theme'
 import { deriveTitle, fetchArticle } from './lib/intake'
 import { CAL_PASSAGE, SAMPLE, STARTERS } from './lib/content'
 import { audioRate, pickVoice } from './lib/voices'
-import { hasWebGPU, loadKokoro, neuralSpeed, neuralSynth } from './lib/neuralTts'
+import { loadKokoro, neuralSpeed, neuralSynth } from './lib/neuralTts'
+import {
+  getAudioContext,
+  holdContextAwake,
+  releaseContextAwake,
+  resumeContext,
+} from './lib/webAudio'
 
 export type PanelKey = 'intake' | 'library' | 'settings' | 'stats' | 'calibrate' | 'more' | null
 export type IntakeTab = 'paste' | 'pdf' | 'url'
@@ -148,6 +154,10 @@ interface Refs {
   audioCtx: AudioContext | null
   srcNode: AudioBufferSourceNode | null
   rafId: number
+  // Guards against a clip that starts but never reports finishing — see the
+  // watchdog in neuralChunk.
+  clipT?: ReturnType<typeof setTimeout>
+  clipDone: boolean
   prefetch: Map<number, Promise<{ audio: Float32Array; rate: number }>>
   // Storage-full is warned about once per app run: persistProgress writes on
   // every pause, and a toast on each one would be its own kind of broken.
@@ -177,6 +187,7 @@ export function useSpeedReader() {
     audioCtx: null,
     srcNode: null,
     rafId: 0,
+    clipDone: false,
     prefetch: new Map(),
     quotaWarned: false,
   }).current
@@ -318,7 +329,13 @@ export function useSpeedReader() {
   const cancelAudio = useCallback(() => {
     r.audioActive = false
     r.neuralActive = false
+    clearTimeout(r.clipT)
+    releaseContextAwake()
     try {
+      // Detach first: stop() still fires onended, and that callback advances the
+      // chunk chain — left attached it lands after the next play() has already
+      // begun and skips a chunk.
+      if (r.srcNode) r.srcNode.onended = null
       r.srcNode?.stop()
     } catch {
       /* no-op */
@@ -478,15 +495,17 @@ export function useSpeedReader() {
   // the word highlight to the produced clip's duration. Falls back to the system
   // voice if the model can't load. Nothing is uploaded.
   playNeural.current = () => {
-    const AC =
-      window.AudioContext ||
-      (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext
-    if (!AC) {
+    // Created and resumed here, inside the tap that started playback: iOS only
+    // unlocks a context while a gesture is being handled, and the first clip is
+    // a whole model download away.
+    const ctx0 = getAudioContext()
+    if (!ctx0) {
       playAudio.current()
       return
     }
-    if (!r.audioCtx) r.audioCtx = new AC()
-    r.audioCtx.resume?.().catch(() => {})
+    r.audioCtx = ctx0
+    void resumeContext(ctx0)
+    holdContextAwake(ctx0)
 
     const w = stateRef.current.words
     const chunks: AudioChunk[] = []
@@ -510,19 +529,30 @@ export function useSpeedReader() {
     r.ci = 0
     r.neuralActive = true
     r.prefetch = new Map()
-    setState({
-      neuralStatus: hasWebGPU() ? 'Loading voice…' : 'Loading voice (no GPU — may be slow)…',
+    setState({ neuralStatus: 'Loading voice…' })
+    loadKokoro((msg) => {
+      if (r.neuralActive) setState({ neuralStatus: msg })
     })
-    loadKokoro((pct) => {
-      if (r.neuralActive) setState({ neuralStatus: `Downloading voice… ${pct}%` })
-    })
-      .then(() => {
+      .then(async () => {
         if (!r.neuralActive) return
+        // The download can run for minutes, and Safari suspends the context out
+        // from under a page that goes to the background — or locks — meanwhile.
+        // Playing into a suspended context makes no sound and never fires
+        // onended, which is a silent, permanent stall.
+        const running = await resumeContext(ctx0)
+        if (!r.neuralActive) return
+        releaseContextAwake()
+        if (!running) {
+          r.neuralActive = false
+          setState({ neuralStatus: 'Audio was interrupted — press play again to hear the voice.' })
+          return
+        }
         setState({ neuralStatus: '' })
         neuralChunk.current()
       })
       .catch(() => {
         r.neuralActive = false
+        releaseContextAwake()
         setState({ neuralStatus: 'On-device voice failed — using the device voice.' })
         if (stateRef.current.playing && window.speechSynthesis) playAudio.current()
       })
@@ -544,7 +574,7 @@ export function useSpeedReader() {
     // every clip it had ever spoken.
     r.prefetch.delete(r.ci)
     clipP
-      .then((clip) => {
+      .then(async (clip) => {
         if (!r.neuralActive) return
         const ni = r.ci + 1
         if (ni < r.chunks.length && !r.prefetch.has(ni)) {
@@ -560,6 +590,17 @@ export function useSpeedReader() {
           r.ci++
           neuralChunk.current()
           return
+        }
+        // A context Safari interrupted mid-read swallows start() silently, so
+        // check on every clip rather than only at the top of the session.
+        if (ctx.state !== 'running') {
+          const running = await resumeContext(ctx)
+          if (!r.neuralActive) return
+          if (!running) {
+            r.neuralActive = false
+            setState({ neuralStatus: 'Audio was interrupted — press play again to hear the voice.' })
+            return
+          }
         }
         const buf = ctx.createBuffer(1, clip.audio.length, clip.rate)
         buf.getChannelData(0).set(clip.audio)
@@ -589,8 +630,15 @@ export function useSpeedReader() {
           }
           r.rafId = requestAnimationFrame(step)
         }
-        src.onended = () => {
-          if (!r.neuralActive) return
+        // onended is the only thing that advances the chain, and iOS drops it if
+        // the clip is cut short by an interruption. Without a backstop the read
+        // parks on one word with no way out but a restart, so give the clip its
+        // own duration plus a margin and move on regardless.
+        r.clipDone = false
+        const advance = () => {
+          if (!r.neuralActive || r.clipDone) return
+          r.clipDone = true
+          clearTimeout(r.clipT)
           if (r.rafId) {
             cancelAnimationFrame(r.rafId)
             r.rafId = 0
@@ -599,7 +647,10 @@ export function useSpeedReader() {
           r.ci++
           neuralChunk.current()
         }
+        src.onended = advance
         src.start()
+        clearTimeout(r.clipT)
+        r.clipT = setTimeout(advance, buf.duration * 1000 + 2000)
         r.rafId = requestAnimationFrame(step)
       })
       .catch(() => {
@@ -1018,14 +1069,13 @@ export function useSpeedReader() {
   // Loads (downloading on first use) the neural model and speaks a short sample
   // so the voice can be auditioned before committing to a whole reading session.
   const previewNeural = useCallback(() => {
-    const AC =
-      window.AudioContext ||
-      (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext
-    if (!AC) return
-    if (!r.audioCtx) r.audioCtx = new AC()
-    r.audioCtx.resume?.().catch(() => {})
-    setState({ neuralStatus: hasWebGPU() ? 'Loading voice…' : 'Loading voice (no GPU — may be slow)…' })
-    loadKokoro((pct) => setState({ neuralStatus: `Downloading voice… ${pct}%` }))
+    const ctx = getAudioContext()
+    if (!ctx) return
+    r.audioCtx = ctx
+    void resumeContext(ctx)
+    holdContextAwake(ctx)
+    setState({ neuralStatus: 'Loading voice…' })
+    loadKokoro((msg) => setState({ neuralStatus: msg }))
       .then(() =>
         neuralSynth(
           'The quick brown fox jumps over the lazy dog.',
@@ -1033,10 +1083,17 @@ export function useSpeedReader() {
           neuralSpeed(stateRef.current.wpm),
         ),
       )
-      .then((clip) => {
+      .then(async (clip) => {
+        releaseContextAwake()
+        if (!clip.audio.length) {
+          setState({ neuralStatus: '' })
+          return
+        }
+        if (!(await resumeContext(ctx))) {
+          setState({ neuralStatus: 'Audio was interrupted — tap Preview again.' })
+          return
+        }
         setState({ neuralStatus: '' })
-        const ctx = r.audioCtx
-        if (!ctx || !clip.audio.length) return
         const buf = ctx.createBuffer(1, clip.audio.length, clip.rate)
         buf.getChannelData(0).set(clip.audio)
         const src = ctx.createBufferSource()
@@ -1044,7 +1101,10 @@ export function useSpeedReader() {
         src.connect(ctx.destination)
         src.start()
       })
-      .catch(() => setState({ neuralStatus: 'Preview failed to load the voice.' }))
+      .catch(() => {
+        releaseContextAwake()
+        setState({ neuralStatus: 'Preview failed to load the voice.' })
+      })
   }, [r, setState])
 
   const toggleAudio = useCallback(() => {
