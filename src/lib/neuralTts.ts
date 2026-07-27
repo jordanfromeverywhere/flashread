@@ -8,11 +8,16 @@ import { load, save } from './storage'
 
 const MODEL_ID = 'onnx-community/Kokoro-82M-v1.0-ONNX'
 
-// Which execution provider actually worked here, so a device that has already
-// proved it cannot run the model isn't retried on every launch.
-const DEVICE_KEY = 'sr_neural_device'
+// The configuration that actually worked here, so a device that has already
+// proved it cannot run one is not made to rediscover that on every launch.
+const CONFIG_KEY = 'sr_neural_config'
 
 export type NeuralDevice = 'webgpu' | 'wasm'
+export type NeuralDtype = 'q8' | 'q4'
+export interface NeuralConfig {
+  device: NeuralDevice
+  dtype: NeuralDtype
+}
 
 // How long a load may go without any sign of life before it is declared wedged.
 // Progress events reset the clock, so a slow download never trips this: the
@@ -20,6 +25,14 @@ export type NeuralDevice = 'webgpu' | 'wasm'
 // built. WebGPU is where sessions hang outright; WASM is merely slow, and on an
 // older phone building an 82M-parameter graph genuinely does take a while.
 const STALL_MS: Record<NeuralDevice, number> = { webgpu: 45_000, wasm: 240_000 }
+
+// Ordered fallbacks. q4 is half the weights of q8 — a little rougher, but it
+// both downloads and builds in noticeably less, which is what an older phone
+// with a capped WASM heap needs.
+const LADDER: NeuralConfig[] = [
+  { device: 'wasm', dtype: 'q8' },
+  { device: 'wasm', dtype: 'q4' },
+]
 
 // requestAdapter() itself can never settle on a half-implemented WebGPU.
 const ADAPTER_MS = 4_000
@@ -55,10 +68,15 @@ export function isIOS(): boolean {
   return /Macintosh/.test(ua) && (navigator.maxTouchPoints || 0) > 1
 }
 
-function rememberedDevice(): NeuralDevice | null {
-  const v = load<string>(DEVICE_KEY, '')
-  return v === 'webgpu' || v === 'wasm' ? v : null
+function rememberedConfig(): NeuralConfig | null {
+  const v = load<Partial<NeuralConfig>>(CONFIG_KEY, {})
+  const okDevice = v?.device === 'webgpu' || v?.device === 'wasm'
+  const okDtype = v?.dtype === 'q8' || v?.dtype === 'q4'
+  return okDevice && okDtype ? { device: v.device!, dtype: v.dtype! } : null
 }
+
+const sameConfig = (a: NeuralConfig, b: NeuralConfig) =>
+  a.device === b.device && a.dtype === b.dtype
 
 /**
  * Picks an execution provider we have reason to believe can actually run.
@@ -71,8 +89,6 @@ function rememberedDevice(): NeuralDevice | null {
  * obtainable (a browser can expose WebGPU with no usable GPU behind it).
  */
 async function pickDevice(): Promise<NeuralDevice> {
-  const remembered = rememberedDevice()
-  if (remembered) return remembered
   if (isIOS() || !hasWebGPU()) return 'wasm'
   const gpu = (navigator as GPUNavigator).gpu
   if (!gpu) return 'wasm'
@@ -159,23 +175,41 @@ function emit(message: string) {
 let ttsPromise: Promise<KokoroTTS> | null = null
 
 /**
- * Points onnxruntime-web at the copy of its WASM runtime we ship (see the
- * ort-runtime plugin in vite.config.ts) instead of transformers.js's jsDelivr
- * default. Same-origin means the service worker caches it, so it is paid for
- * once rather than on every cold start, and the voice really does work offline.
+ * Configures onnxruntime-web before any session is built.
+ *
+ *  - wasmPaths: the copy of the runtime we ship (see the ort-runtime plugin in
+ *    vite.config.ts) rather than transformers.js's jsDelivr default. Same-origin
+ *    means the service worker caches it, so it is paid for once instead of on
+ *    every cold start, and the voice really does work offline. It also lets the
+ *    proxy worker below be created directly, with no cross-origin blob shim.
+ *
+ *  - proxy: run the runtime in a Web Worker. Transformers.js defaults this off
+ *    because it doesn't matter on a GPU, but on the WASM path *everything* —
+ *    building the graph, then every sentence generated — runs wherever this
+ *    says. On the main thread that means an iPhone freezes solid for as long as
+ *    an 82M-parameter graph takes to build: no repaint, no status update, no
+ *    watchdog, nothing but a stuck message. In a worker the app stays alive and
+ *    the audio arrives when it arrives.
+ *
+ *  - numThreads: pinned to 1. Session creation is documented to hang outright
+ *    with multi-threading (onnxruntime#26858), and without cross-origin
+ *    isolation there is no SharedArrayBuffer to thread with anyway.
  */
-async function useLocalRuntime() {
+async function configureRuntime() {
   try {
     const { env } = await import('@huggingface/transformers')
     const wasm = env.backends?.onnx?.wasm
-    if (wasm) wasm.wasmPaths = new URL('ort/', document.baseURI).href
+    if (!wasm) return
+    wasm.wasmPaths = new URL('ort/', document.baseURI).href
+    wasm.numThreads = 1
+    wasm.proxy = true
   } catch {
-    /* fall back to the bundled default rather than failing the load */
+    /* fall back to the bundled defaults rather than failing the load */
   }
 }
 
-async function build(device: NeuralDevice): Promise<KokoroTTS> {
-  await useLocalRuntime()
+async function build(cfg: NeuralConfig): Promise<KokoroTTS> {
+  await configureRuntime()
   const { KokoroTTS } = await import('kokoro-js')
   const beat = { at: Date.now() }
   // Building the session after the bytes land is the slow, silent part — several
@@ -183,11 +217,11 @@ async function build(device: NeuralDevice): Promise<KokoroTTS> {
   // has actually finished. It is deliberately not latched: a later file starting
   // its own download puts the percentage back on screen.
   const starting =
-    device === 'wasm' ? 'Starting the voice (no GPU — may take a moment)…' : 'Starting the voice…'
+    cfg.device === 'wasm' ? 'Starting the voice (a moment on phones)…' : 'Starting the voice…'
   let peak = 0
   const session = KokoroTTS.from_pretrained(MODEL_ID, {
-    dtype: 'q8',
-    device,
+    dtype: cfg.dtype,
+    device: cfg.device,
     progress_callback: (p: { status?: string; progress?: number }) => {
       beat.at = Date.now()
       if (p?.status === 'progress' && typeof p.progress === 'number') {
@@ -201,25 +235,38 @@ async function build(device: NeuralDevice): Promise<KokoroTTS> {
       if (peak >= 99) emit(starting)
     },
   })
-  return withStallGuard(session, STALL_MS[device], beat)
+  return withStallGuard(session, STALL_MS[cfg.device], beat)
 }
 
+/**
+ * Works down the ladder until something loads, remembering what did. Anything
+ * already known to work here is tried first; the rest stay as fallbacks, since
+ * a configuration can stop working (a browser update, a device under memory
+ * pressure) and a remembered choice must not become a permanent dead end.
+ */
 async function loadOnce(): Promise<KokoroTTS> {
-  const device = await pickDevice()
-  emit('Loading voice…')
-  try {
-    const tts = await build(device)
-    save(DEVICE_KEY, device)
-    return tts
-  } catch (e) {
-    if (device === 'wasm') throw e
-    // The GPU path is wedged or refused here. Remember that before retrying, so
-    // the next launch goes straight to the provider that works.
-    save(DEVICE_KEY, 'wasm')
-    emit('Voice needs the slower path — retrying…')
-    const tts = await build('wasm')
-    return tts
+  const remembered = rememberedConfig()
+  const preferred = await pickDevice()
+  const plan: NeuralConfig[] = []
+  if (remembered) plan.push(remembered)
+  if (preferred === 'webgpu') plan.push({ device: 'webgpu', dtype: 'q8' })
+  for (const cfg of LADDER) plan.push(cfg)
+
+  let lastError: unknown = new Error('no configuration available')
+  const tried: NeuralConfig[] = []
+  for (const cfg of plan) {
+    if (tried.some((c) => sameConfig(c, cfg))) continue
+    emit(tried.length === 0 ? 'Loading voice…' : 'Trying a lighter voice…')
+    tried.push(cfg)
+    try {
+      const tts = await build(cfg)
+      save(CONFIG_KEY, cfg)
+      return tts
+    } catch (e) {
+      lastError = e
+    }
   }
+  throw lastError
 }
 
 /**
