@@ -23,6 +23,32 @@ import {
   resumeContext,
 } from './lib/webAudio'
 
+/**
+ * Words per narration chunk, by position in the read.
+ *
+ * Time to first word is one whole chunk of generation, so a full-size opening
+ * chunk is the longest silence in the session. Against the deployed server a
+ * 24-word chunk takes ~3.0s to generate and an 8-word one ~1.4s, so the first
+ * two are deliberately short and the size ramps up once audio is playing and
+ * the prefetch has a clip's duration to work in.
+ *
+ * The ramp is 8, then 12, rather than 8 straight to 24: the prefetch of chunk
+ * two only starts when chunk one's audio arrives, so it has that clip's 3.2s to
+ * finish in, and 24 words takes 3.0s of that. Twelve leaves real margin instead
+ * of two tenths of a second.
+ *
+ * Server engine only. On-device, the first chunk waits behind a model download
+ * and a graph build that dwarf it, and that engine has no spare throughput to
+ * pay the extra per-call overhead more chunks would cost.
+ */
+const CLOUD_CHUNK_RAMP = [8, 12]
+const MAX_CHUNK_WORDS = 24
+
+function chunkCap(index: number, cloudOn: boolean): number {
+  if (!cloudOn) return MAX_CHUNK_WORDS
+  return CLOUD_CHUNK_RAMP[index] ?? MAX_CHUNK_WORDS
+}
+
 export type PanelKey = 'intake' | 'library' | 'settings' | 'stats' | 'calibrate' | 'more' | null
 export type IntakeTab = 'paste' | 'pdf' | 'url'
 export type CalState = 'idle' | 'running' | 'done'
@@ -517,13 +543,14 @@ export function useSpeedReader() {
       let j = i
       let cnt = 0
       const parts: string[] = []
+      const limit = chunkCap(chunks.length, stateRef.current.cloudOn)
       while (j < w.length) {
         const tk = w[j]
         parts.push(tk)
         cnt++
         j++
         if (/[.!?…]["')\]]?$/.test(tk) && cnt >= 3) break
-        if (cnt >= 24) break
+        if (cnt >= limit) break
       }
       chunks.push({ text: parts.join(' '), start: i, offsets: [], count: cnt })
       i = j
