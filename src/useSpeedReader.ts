@@ -15,6 +15,7 @@ import { deriveTitle, fetchArticle } from './lib/intake'
 import { CAL_PASSAGE, SAMPLE, STARTERS } from './lib/content'
 import { audioRate, pickVoice } from './lib/voices'
 import { loadKokoro, neuralSpeed, neuralSynth } from './lib/neuralTts'
+import { cloudSynth } from './lib/cloudTts'
 import {
   getAudioContext,
   holdContextAwake,
@@ -91,6 +92,7 @@ function initialState(): ReaderState {
     voiceURI: s.voiceURI || '',
     neuralOn: !!s.neuralOn,
     neuralVoice: s.neuralVoice || 'af_heart',
+    cloudOn: !!s.cloudOn,
     neuralStatus: '',
     words: [],
     breaks: [],
@@ -227,6 +229,7 @@ export function useSpeedReader() {
       voiceURI: s.voiceURI,
       neuralOn: s.neuralOn,
       neuralVoice: s.neuralVoice,
+      cloudOn: s.cloudOn,
     }
     save(STORAGE_KEYS.settings, out)
   }, [])
@@ -529,10 +532,15 @@ export function useSpeedReader() {
     r.ci = 0
     r.neuralActive = true
     r.prefetch = new Map()
-    setState({ neuralStatus: 'Loading voice…' })
-    loadKokoro((msg) => {
-      if (r.neuralActive) setState({ neuralStatus: msg })
-    })
+    // The server engine has nothing to load — the first chunk is a request, not
+    // an 80MB download and a graph build.
+    const ready = stateRef.current.cloudOn
+      ? (setState({ neuralStatus: 'Connecting…' }), Promise.resolve(undefined))
+      : (setState({ neuralStatus: 'Loading voice…' }),
+        loadKokoro((msg) => {
+          if (r.neuralActive) setState({ neuralStatus: msg })
+        }))
+    ready
       .then(async () => {
         if (!r.neuralActive) return
         // The download can run for minutes, and Safari suspends the context out
@@ -553,7 +561,11 @@ export function useSpeedReader() {
       .catch(() => {
         r.neuralActive = false
         releaseContextAwake()
-        setState({ neuralStatus: 'On-device voice failed — using the device voice.' })
+        setState({
+          neuralStatus: stateRef.current.cloudOn
+            ? 'Voice server unreachable — using the device voice.'
+            : 'On-device voice failed — using the device voice.',
+        })
         if (stateRef.current.playing && window.speechSynthesis) playAudio.current()
       })
   }
@@ -568,7 +580,14 @@ export function useSpeedReader() {
     const c = r.chunks[r.ci]
     const voice = stateRef.current.neuralVoice
     const speed = neuralSpeed(stateRef.current.wpm)
-    const clipP = r.prefetch.get(r.ci) || neuralSynth(c.text, voice, speed)
+    // Where the audio comes from is the only thing that differs between the
+    // on-device and server engines — chunking, prefetch and highlight sync are
+    // shared, so the rest of this function never learns which one is in use.
+    const synth = (text: string) =>
+      stateRef.current.cloudOn
+        ? cloudSynth(text, voice, speed, ctx)
+        : neuralSynth(text, voice, speed)
+    const clipP = r.prefetch.get(r.ci) || synth(c.text)
     // Consumed — drop it. Entries hold decoded PCM (roughly 750KB per 24-word
     // chunk at 24kHz), so retaining them meant a book-length read accumulated
     // every clip it had ever spoken.
@@ -580,7 +599,7 @@ export function useSpeedReader() {
         if (ni < r.chunks.length && !r.prefetch.has(ni)) {
           r.prefetch.set(
             ni,
-            neuralSynth(r.chunks[ni].text, voice, speed).catch(() => ({
+            synth(r.chunks[ni].text).catch(() => ({
               audio: new Float32Array(0),
               rate: clip.rate,
             })),
@@ -1074,15 +1093,17 @@ export function useSpeedReader() {
     r.audioCtx = ctx
     void resumeContext(ctx)
     holdContextAwake(ctx)
-    setState({ neuralStatus: 'Loading voice…' })
-    loadKokoro((msg) => setState({ neuralStatus: msg }))
-      .then(() =>
-        neuralSynth(
-          'The quick brown fox jumps over the lazy dog.',
-          stateRef.current.neuralVoice,
-          neuralSpeed(stateRef.current.wpm),
-        ),
-      )
+    const SAMPLE_LINE = 'The quick brown fox jumps over the lazy dog.'
+    const voice = stateRef.current.neuralVoice
+    const speed = neuralSpeed(stateRef.current.wpm)
+    const clip = stateRef.current.cloudOn
+      ? (setState({ neuralStatus: 'Connecting…' }),
+        cloudSynth(SAMPLE_LINE, voice, speed, ctx))
+      : (setState({ neuralStatus: 'Loading voice…' }),
+        loadKokoro((msg) => setState({ neuralStatus: msg })).then(() =>
+          neuralSynth(SAMPLE_LINE, voice, speed),
+        ))
+    clip
       .then(async (clip) => {
         releaseContextAwake()
         if (!clip.audio.length) {
@@ -1101,9 +1122,13 @@ export function useSpeedReader() {
         src.connect(ctx.destination)
         src.start()
       })
-      .catch(() => {
+      .catch((e) => {
         releaseContextAwake()
-        setState({ neuralStatus: 'Preview failed to load the voice.' })
+        setState({
+          neuralStatus: stateRef.current.cloudOn
+            ? `Voice server: ${e?.message || 'unreachable'}`
+            : 'Preview failed to load the voice.',
+        })
       })
   }, [r, setState])
 
@@ -1120,6 +1145,23 @@ export function useSpeedReader() {
       } else tick.current()
     } else if (!on) cancelAudio()
   }, [cancelAudio, r, set])
+
+  /**
+   * Switches between generating on the phone and generating on your own server.
+   * Only meaningful while the neural engine is selected — it picks *where* that
+   * engine runs, not whether it is on.
+   */
+  const setCloud = useCallback(
+    (on: boolean) => {
+      set({ cloudOn: on })
+      if (stateRef.current.playing && stateRef.current.audioOn && stateRef.current.neuralOn) {
+        clearTimeout(r.timer)
+        cancelAudio()
+        playNeural.current()
+      }
+    },
+    [cancelAudio, r, set],
+  )
 
   const toggleNeural = useCallback(() => {
     const on = !stateRef.current.neuralOn
@@ -1349,6 +1391,7 @@ export function useSpeedReader() {
       previewNeural,
       toggleAudio,
       toggleNeural,
+      setCloud,
       setNeuralVoice,
       dismissToast,
       openIntake,
