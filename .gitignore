@@ -5,3 +5,7 @@ dist-ssr
 .DS_Store
 .vite
 tsconfig.tsbuildinfo
+
+# Python bytecode from the narration server
+__pycache__/
+*.pyc

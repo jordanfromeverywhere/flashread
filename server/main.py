@@ -14,15 +14,23 @@ from __future__ import annotations
 
 import hashlib
 import io
+import logging
 import os
 import threading
 from collections import OrderedDict
+from contextlib import asynccontextmanager
 
 import numpy as np
 import soundfile as sf
 from fastapi import FastAPI, Header, HTTPException, Response
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
+
+# uvicorn only configures its own loggers, so without this the messages below
+# reach no handler and the thread count never appears in the deploy log, which
+# is exactly the thing worth being able to check from Railway.
+logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
+log = logging.getLogger("flashread")
 
 MODEL_PATH = os.environ.get("KOKORO_MODEL", "kokoro-v1.0.onnx")
 VOICES_PATH = os.environ.get("KOKORO_VOICES", "voices-v1.0.bin")
@@ -49,7 +57,69 @@ CACHE_MAX = int(os.environ.get("CACHE_ENTRIES", "512"))
 
 MAX_CHARS = 800
 
-app = FastAPI(title="Flashread narration")
+
+def cpu_quota() -> int:
+    """CPUs this container may actually use, not the ones it can see.
+
+    os.cpu_count() reports the host's cores, so on a 16-core host holding a
+    2-CPU quota it is off by 8x, and onnxruntime sizes its thread pool from it.
+    """
+    try:
+        with open("/sys/fs/cgroup/cpu.max") as f:  # cgroup v2
+            quota, period = f.read().split()
+        if quota != "max":
+            return max(1, round(float(quota) / float(period)))
+    except (OSError, ValueError):
+        pass
+    try:  # cgroup v1
+        with open("/sys/fs/cgroup/cpu/cpu.cfs_quota_us") as f:
+            q = int(f.read())
+        with open("/sys/fs/cgroup/cpu/cpu.cfs_period_us") as f:
+            p = int(f.read())
+        if q > 0:
+            return max(1, q // p)
+    except (OSError, ValueError):
+        pass
+    return os.cpu_count() or 1
+
+
+# Threads onnxruntime may use for a single generation.
+#
+# Left to itself it takes os.cpu_count(), which inside a container is the host's
+# core count rather than the quota, and the oversubscription is not a small tax:
+# measured on a 16-core host limited to 2 CPUs, the default 16 threads gave a
+# real-time factor of 3.9 (narration falling four times behind the reader), and
+# pinning it to 2 gave 0.76. The same model.
+#
+# Past four threads it gets worse again even with cores to spare (RTF 0.51 at
+# four, 0.58 at eight on an 8-CPU quota): this graph stops parallelising and the
+# synchronisation starts costing more than it saves. So: match the quota, cap at
+# four. TTS_THREADS overrides it if a particular box disagrees.
+THREADS = int(os.environ.get("TTS_THREADS") or min(4, cpu_quota()))
+
+
+@asynccontextmanager
+async def lifespan(_: FastAPI):
+    """Build the session and run one synthesis before the first real request.
+
+    Loading is otherwise lazy, so whoever presses play first waits about three
+    and a half seconds for a session build and graph warmup that has nothing to
+    do with their sentence. Railway's health check allows 300s for startup,
+    which is ample cover for it.
+
+    Best-effort: a box that cannot warm up should still come up and return a
+    legible error per request rather than crash-loop with the reason buried in a
+    boot log.
+    """
+    try:
+        get_kokoro().create("Ready.", voice="af_heart", speed=1.0, lang="en-us")
+        log.info("warmup complete")
+    except Exception:
+        log.exception("warmup failed; continuing and will retry per request")
+    yield
+
+
+app = FastAPI(title="Flashread narration", lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=ALLOWED_ORIGINS,
@@ -70,9 +140,20 @@ _kokoro = None
 def get_kokoro():
     global _kokoro
     if _kokoro is None:
+        import onnxruntime as rt
         from kokoro_onnx import Kokoro
 
-        _kokoro = Kokoro(MODEL_PATH, VOICES_PATH)
+        # Kokoro's own constructor builds the session with default options, which
+        # is the oversubscription described at THREADS. from_session is the seam
+        # that lets the thread count be set before the pool is created.
+        opts = rt.SessionOptions()
+        opts.intra_op_num_threads = THREADS
+        opts.inter_op_num_threads = 1
+        session = rt.InferenceSession(
+            MODEL_PATH, sess_options=opts, providers=["CPUExecutionProvider"]
+        )
+        _kokoro = Kokoro.from_session(session, VOICES_PATH)
+        log.info("kokoro ready: %d intra-op threads (quota %d)", THREADS, cpu_quota())
     return _kokoro
 
 
